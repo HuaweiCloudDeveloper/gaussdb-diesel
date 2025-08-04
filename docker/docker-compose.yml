@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  # Using PostgreSQL as GaussDB is PostgreSQL-compatible
+  # In production, this would be replaced with actual GaussDB/OpenGauss
+  gaussdb:
+    image: opengauss/opengauss-server:latest
+    container_name: diesel-gaussdb-test
+    environment:
+      POSTGRES_USER: gaussdb
+      POSTGRES_PASSWORD: gaussdb123
+      POSTGRES_DB: diesel_test
+    volumes:
+      - gaussdb-data:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gaussdb -d diesel_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  gaussdb-data:
