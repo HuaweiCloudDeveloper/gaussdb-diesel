@@ -197,6 +197,22 @@ pub trait ExecuteCopyFromDsl<T> {
         F: FnMut() -> QueryResult<Option<Vec<u8>>>;
 }
 
+// Implementation for GaussDBConnection
+impl<T> ExecuteCopyFromDsl<T> for &mut crate::connection::GaussDBConnection
+where
+    T: QueryFragment<crate::backend::GaussDB> + QueryId,
+{
+    fn execute_copy_from<F>(self, callback: F) -> QueryResult<usize>
+    where
+        F: FnMut() -> QueryResult<Option<Vec<u8>>>,
+    {
+        // This would be implemented with a proper COPY FROM query
+        // For now, we'll use a placeholder implementation
+        let query = InternalCopyFromQuery::<(), T>::new(());
+        self.execute_copy_from(&query, callback)
+    }
+}
+
 /// Helper function to create a COPY FROM query
 pub fn copy_from<S>(_target: S) -> CopyFromQuery<S, ()>
 where

@@ -46,7 +46,7 @@ pub mod value;
 
 // Re-export core types
 pub use backend::GaussDB;
-pub use connection::GaussDBConnection;
+pub use connection::{GaussDBConnection, GaussDBCursor, CursorDsl};
 pub use query_builder::GaussDBQueryBuilder;
 
 /// Data types for GaussDB
