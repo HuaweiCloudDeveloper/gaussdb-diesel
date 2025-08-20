@@ -35,6 +35,7 @@
 pub mod backend;
 pub mod connection;
 pub mod metadata_lookup;
+pub mod pool;
 pub mod query_builder;
 pub mod types;
 pub mod gaussdb_extensions;
@@ -63,6 +64,11 @@ pub mod prelude {
     pub use crate::backend::GaussDB;
     pub use crate::connection::GaussDBConnection;
     pub use crate::query_builder::GaussDBQueryBuilder;
+
+    // Connection pool support
+    #[cfg(feature = "r2d2")]
+    pub use crate::pool::{GaussDBConnectionManager, GaussDBPool, PooledGaussDBConnection};
+
     pub use diesel::prelude::*;
 }
 

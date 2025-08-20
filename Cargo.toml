@@ -9,9 +9,8 @@ documentation = "https://docs.rs/diesel-gaussdb"
 keywords = ["database", "orm", "gaussdb", "opengauss", "diesel"]
 categories = ["database"]
 readme = "README.md"
-rust-version.workspace = true
-include.workspace = true
-edition.workspace = true
+edition = "2021"
+rust-version = "1.70"
 
 [dependencies]
 diesel = { version = "2.2.12", default-features = false, features = ["postgres_backend", "i-implement-a-third-party-backend-and-opt-into-breaking-changes"] }

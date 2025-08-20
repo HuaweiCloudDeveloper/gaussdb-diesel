@@ -11,10 +11,13 @@ use diesel::connection::statement_cache::StatementCache;
 use diesel::connection::{
     AnsiTransactionManager, Connection, ConnectionSealed, Instrumentation, SimpleConnection,
 };
+use diesel::query_builder::{QueryFragment, QueryBuilder, AstPass};
+use diesel::expression::QueryMetadata;
 use diesel::result::{ConnectionResult, QueryResult, Error as DieselError};
 use std::fmt;
 
 use crate::backend::GaussDB;
+use crate::metadata_lookup::{GetGaussDBMetadataCache, GaussDBMetadataCache};
 
 #[cfg(feature = "gaussdb")]
 use gaussdb::{Client, Statement};
@@ -38,6 +41,8 @@ pub struct GaussDBConnection {
     statement_cache: StatementCache<GaussDB, Statement>,
     #[cfg(not(feature = "gaussdb"))]
     statement_cache: StatementCache<GaussDB, String>,
+    /// Metadata cache for type lookups
+    metadata_cache: GaussDBMetadataCache,
 }
 
 impl fmt::Debug for GaussDBConnection {
@@ -135,6 +140,7 @@ impl Connection for GaussDBConnection {
                 transaction_manager,
                 instrumentation,
                 statement_cache: StatementCache::new(),
+                metadata_cache: GaussDBMetadataCache::new(),
             })
         }
         #[cfg(not(feature = "gaussdb"))]
@@ -155,17 +161,64 @@ impl Connection for GaussDBConnection {
                 transaction_manager,
                 instrumentation,
                 statement_cache: StatementCache::new(),
+                metadata_cache: GaussDBMetadataCache::new(),
             })
         }
     }
 
-    fn execute_returning_count<T>(&mut self, _source: &T) -> QueryResult<usize>
+    fn execute_returning_count<T>(&mut self, source: &T) -> QueryResult<usize>
     where
         T: diesel::query_builder::QueryFragment<GaussDB> + diesel::query_builder::QueryId,
     {
-        // For now, just return 0 as a placeholder
-        // In a real implementation, this would build and execute the query
-        Ok(0)
+        // 参考 PostgreSQL Diesel 的实现模式
+        // 1. 收集绑定参数
+        let mut bind_collector = diesel::query_builder::bind_collector::RawBytesBindCollector::<GaussDB>::new();
+        source.collect_binds(&mut bind_collector, self, &GaussDB)?;
+        let binds = bind_collector.binds;
+        let metadata = bind_collector.metadata;
+
+        // 2. 构建 SQL 查询
+        let mut query_builder = crate::query_builder::GaussDBQueryBuilder::new();
+        source.to_sql(&mut query_builder, &GaussDB)?;
+        let sql = query_builder.finish();
+
+        // 3. 执行查询
+        #[cfg(feature = "gaussdb")]
+        {
+            // 将 Diesel 的绑定参数转换为 gaussdb 兼容的格式
+            // 暂时使用空参数，后续实现完整的参数转换
+            let empty_params: Vec<&(dyn gaussdb::types::ToSql + Sync)> = vec![];
+
+            // 判断是否是查询语句还是命令语句
+            let sql_trimmed = sql.trim().to_uppercase();
+            if sql_trimmed.starts_with("SELECT") || sql_trimmed.starts_with("WITH") {
+                // 对于查询语句，使用 query 方法
+                let rows = self.raw_connection.query(&sql, &empty_params)
+                    .map_err(|e| diesel::result::Error::DatabaseError(
+                        diesel::result::DatabaseErrorKind::UnableToSendCommand,
+                        Box::new(format!("GaussDB query error: {}", e))
+                    ))?;
+
+                // 返回查询结果的行数
+                Ok(rows.len())
+            } else {
+                // 对于命令语句（INSERT, UPDATE, DELETE），使用 execute 方法
+                let empty_params: Vec<&(dyn gaussdb::types::ToSql + Sync)> = vec![];
+                let rows_affected = self.raw_connection.execute(&sql, &empty_params)
+                    .map_err(|e| diesel::result::Error::DatabaseError(
+                        diesel::result::DatabaseErrorKind::UnableToSendCommand,
+                        Box::new(format!("GaussDB execute error: {}", e))
+                    ))?;
+
+                // 返回受影响的行数，转换 u64 到 usize
+                Ok(rows_affected as usize)
+            }
+        }
+        #[cfg(not(feature = "gaussdb"))]
+        {
+            // 模拟实现
+            self.raw_connection.execute(&sql).map(|r| r)
+        }
     }
 
     fn transaction_state(&mut self) -> &mut <Self::TransactionManager as diesel::connection::TransactionManager<Self>>::TransactionStateData {
@@ -185,6 +238,29 @@ impl Connection for GaussDBConnection {
     //     // For now, we don't implement statement caching
     //     // In a real implementation, this would configure the cache size
     // }
+}
+
+// 实现必要的 trait
+impl GetGaussDBMetadataCache for GaussDBConnection {
+    fn get_metadata_cache(&mut self) -> &mut GaussDBMetadataCache {
+        &mut self.metadata_cache
+    }
+}
+
+// 实现 LoadConnection trait (简化实现)
+impl diesel::connection::LoadConnection<diesel::connection::DefaultLoadingMode> for GaussDBConnection {
+    type Cursor<'conn, 'query> = std::iter::Empty<QueryResult<Self::Row<'conn, 'query>>>;
+    type Row<'conn, 'query> = crate::connection::row::GaussDBRow<'conn>;
+
+    fn load<'conn, 'query, T>(&'conn mut self, _source: T) -> QueryResult<Self::Cursor<'conn, 'query>>
+    where
+        T: diesel::query_builder::Query + diesel::query_builder::QueryFragment<Self::Backend> + diesel::query_builder::QueryId + 'query,
+        Self::Backend: QueryMetadata<T::SqlType>,
+    {
+        // 简化实现，返回空迭代器
+        // TODO: 实现真实的查询加载
+        Ok(std::iter::empty())
+    }
 }
 
 #[cfg(test)]
