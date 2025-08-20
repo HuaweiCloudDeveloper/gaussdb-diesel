@@ -8,8 +8,9 @@ services:
     container_name: diesel-gaussdb-test
     environment:
       POSTGRES_USER: gaussdb
-      POSTGRES_PASSWORD: gaussdb123
+      POSTGRES_PASSWORD: Gaussdb@123
       POSTGRES_DB: diesel_test
+      GS_PASSWORD: Gaussdb@123
     volumes:
       - gaussdb-data:/var/lib/postgresql/data
       - ./init:/docker-entrypoint-initdb.d
