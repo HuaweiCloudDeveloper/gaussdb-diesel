@@ -7,15 +7,8 @@
 // For now, we'll provide a simplified expression system
 // The full implementation will be added in future phases
 
-/// Placeholder for array expressions
-pub mod array {
-    //! Array expression support for GaussDB (placeholder)
-
-    /// Placeholder array function
-    pub fn array_placeholder() {
-        // This is a placeholder for array functionality
-    }
-}
+/// Array operations and expressions
+pub mod array_ops;
 
 /// Placeholder for array comparison expressions
 pub mod array_comparison {
@@ -32,15 +25,8 @@ pub mod array_comparison {
     }
 }
 
-/// Placeholder for expression methods
-pub mod expression_methods {
-    //! GaussDB specific expression methods (placeholder)
-
-    /// Placeholder for expression methods
-    pub fn expression_methods_placeholder() {
-        // This is a placeholder for expression methods
-    }
-}
+/// GaussDB specific expression methods
+pub mod expression_methods;
 
 /// GaussDB specific functions
 pub mod functions {
@@ -80,12 +66,20 @@ pub mod operators {
 pub mod dsl {
     pub use super::functions::date_and_time::{
         current_date, current_time, current_timestamp, date_part, extract, now,
+        age, date_trunc,
     };
     pub use super::functions::string::{
-        length, lower, substring, trim, upper,
+        length, lower, substring, trim, upper, concat, position,
     };
     pub use super::functions::math::{
-        abs, ceil, floor, round, sqrt,
+        abs, ceil, floor, round, sqrt, power, mod_func,
+    };
+    pub use super::array_ops::{
+        ArrayContainmentOps,
+        functions::array_length,
+    };
+    pub use super::expression_methods::{
+        GaussDBStringExpressionMethods,
     };
 
     /// Placeholder for DSL functions
@@ -102,10 +96,8 @@ mod tests {
     fn test_expression_module_structure() {
         // Test that the module structure is properly set up
         // This is a compile-time test to ensure all modules are accessible
-        array::array_placeholder();
         array_comparison::any_placeholder();
         array_comparison::all_placeholder();
-        expression_methods::expression_methods_placeholder();
         functions::functions_placeholder();
         operators::operators_placeholder();
         dsl::dsl_placeholder();

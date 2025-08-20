@@ -274,6 +274,146 @@ where
 {
 }
 
+/// Creates a PostgreSQL `AGE(timestamp1, timestamp2)` expression.
+///
+/// Returns the interval between two timestamps.
+///
+/// # Examples
+///
+/// ```rust
+/// # use diesel_gaussdb::expression::functions::age;
+/// # use diesel::sql_types::Timestamp;
+/// // AGE('2023-12-25', '2023-01-01')
+/// let age_interval = age(
+///     diesel::dsl::sql::<Timestamp>("'2023-12-25'"),
+///     diesel::dsl::sql::<Timestamp>("'2023-01-01'")
+/// );
+/// ```
+pub fn age<T, U>(timestamp1: T, timestamp2: U) -> AgeFunction<T::Expression, U::Expression>
+where
+    T: AsExpression<Timestamp>,
+    U: AsExpression<Timestamp>,
+{
+    AgeFunction::new(timestamp1.as_expression(), timestamp2.as_expression())
+}
+
+/// PostgreSQL `AGE` function
+#[derive(Debug, Clone, QueryId, ValidGrouping)]
+pub struct AgeFunction<Ts1Expr, Ts2Expr> {
+    timestamp1: Ts1Expr,
+    timestamp2: Ts2Expr,
+}
+
+impl<Ts1Expr, Ts2Expr> AgeFunction<Ts1Expr, Ts2Expr> {
+    fn new(timestamp1: Ts1Expr, timestamp2: Ts2Expr) -> Self {
+        AgeFunction { timestamp1, timestamp2 }
+    }
+}
+
+impl<Ts1Expr, Ts2Expr> Expression for AgeFunction<Ts1Expr, Ts2Expr>
+where
+    Ts1Expr: Expression<SqlType = Timestamp>,
+    Ts2Expr: Expression<SqlType = Timestamp>,
+{
+    type SqlType = diesel::sql_types::Text; // Interval type would be better, but Text for simplicity
+}
+
+impl<Ts1Expr, Ts2Expr> QueryFragment<GaussDB> for AgeFunction<Ts1Expr, Ts2Expr>
+where
+    Ts1Expr: QueryFragment<GaussDB>,
+    Ts2Expr: QueryFragment<GaussDB>,
+{
+    fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, GaussDB>) -> QueryResult<()> {
+        out.push_sql("AGE(");
+        self.timestamp1.walk_ast(out.reborrow())?;
+        out.push_sql(", ");
+        self.timestamp2.walk_ast(out.reborrow())?;
+        out.push_sql(")");
+        Ok(())
+    }
+}
+
+impl<Ts1Expr, Ts2Expr, QS> SelectableExpression<QS> for AgeFunction<Ts1Expr, Ts2Expr>
+where
+    AgeFunction<Ts1Expr, Ts2Expr>: AppearsOnTable<QS>,
+{
+}
+
+impl<Ts1Expr, Ts2Expr, QS> AppearsOnTable<QS> for AgeFunction<Ts1Expr, Ts2Expr>
+where
+    Ts1Expr: Expression<SqlType = Timestamp> + AppearsOnTable<QS>,
+    Ts2Expr: Expression<SqlType = Timestamp> + AppearsOnTable<QS>,
+{
+}
+
+/// Creates a PostgreSQL `DATE_TRUNC(field, source)` expression.
+///
+/// Truncates a timestamp to the specified precision.
+///
+/// # Examples
+///
+/// ```rust
+/// # use diesel_gaussdb::expression::functions::date_trunc;
+/// # use diesel::sql_types::Timestamp;
+/// // DATE_TRUNC('month', '2023-12-25')
+/// let truncated = date_trunc(
+///     "month",
+///     diesel::dsl::sql::<Timestamp>("'2023-12-25'")
+/// );
+/// ```
+pub fn date_trunc<T>(field: &str, source: T) -> DateTruncFunction<T::Expression>
+where
+    T: AsExpression<Timestamp>,
+{
+    DateTruncFunction::new(field.to_string(), source.as_expression())
+}
+
+/// PostgreSQL `DATE_TRUNC` function
+#[derive(Debug, Clone, QueryId, ValidGrouping)]
+pub struct DateTruncFunction<TsExpr> {
+    field: String,
+    source: TsExpr,
+}
+
+impl<TsExpr> DateTruncFunction<TsExpr> {
+    fn new(field: String, source: TsExpr) -> Self {
+        DateTruncFunction { field, source }
+    }
+}
+
+impl<TsExpr> Expression for DateTruncFunction<TsExpr>
+where
+    TsExpr: Expression<SqlType = Timestamp>,
+{
+    type SqlType = Timestamp;
+}
+
+impl<TsExpr> QueryFragment<GaussDB> for DateTruncFunction<TsExpr>
+where
+    TsExpr: QueryFragment<GaussDB>,
+{
+    fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, GaussDB>) -> QueryResult<()> {
+        out.push_sql("DATE_TRUNC('");
+        out.push_sql(&self.field);
+        out.push_sql("', ");
+        self.source.walk_ast(out.reborrow())?;
+        out.push_sql(")");
+        Ok(())
+    }
+}
+
+impl<TsExpr, QS> SelectableExpression<QS> for DateTruncFunction<TsExpr>
+where
+    DateTruncFunction<TsExpr>: AppearsOnTable<QS>,
+{
+}
+
+impl<TsExpr, QS> AppearsOnTable<QS> for DateTruncFunction<TsExpr>
+where
+    TsExpr: Expression<SqlType = Timestamp> + AppearsOnTable<QS>,
+{
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

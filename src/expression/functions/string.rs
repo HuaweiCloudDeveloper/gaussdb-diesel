@@ -337,6 +337,150 @@ where
 {
 }
 
+/// Creates a PostgreSQL `CONCAT(string1, string2, ...)` expression.
+///
+/// Concatenates multiple strings together.
+///
+/// # Examples
+///
+/// ```rust
+/// # use diesel_gaussdb::expression::functions::concat;
+/// # use diesel::sql_types::Text;
+/// // CONCAT('Hello', ' ', 'World')
+/// let concatenated = concat(vec![
+///     diesel::dsl::sql::<Text>("'Hello'"),
+///     diesel::dsl::sql::<Text>("' '"),
+///     diesel::dsl::sql::<Text>("'World'")
+/// ]);
+/// ```
+pub fn concat<T>(strings: Vec<T>) -> ConcatFunction<Vec<T::Expression>>
+where
+    T: AsExpression<Text>,
+{
+    let expressions = strings.into_iter().map(|s| s.as_expression()).collect();
+    ConcatFunction::new(expressions)
+}
+
+/// PostgreSQL `CONCAT` function
+#[derive(Debug, Clone, QueryId, ValidGrouping)]
+pub struct ConcatFunction<Expr> {
+    strings: Expr,
+}
+
+impl<Expr> ConcatFunction<Expr> {
+    fn new(strings: Expr) -> Self {
+        ConcatFunction { strings }
+    }
+}
+
+impl<Expr> Expression for ConcatFunction<Vec<Expr>>
+where
+    Expr: Expression<SqlType = Text>,
+{
+    type SqlType = Text;
+}
+
+impl<Expr> QueryFragment<GaussDB> for ConcatFunction<Vec<Expr>>
+where
+    Expr: QueryFragment<GaussDB>,
+{
+    fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, GaussDB>) -> QueryResult<()> {
+        out.push_sql("CONCAT(");
+        for (i, string) in self.strings.iter().enumerate() {
+            if i > 0 {
+                out.push_sql(", ");
+            }
+            string.walk_ast(out.reborrow())?;
+        }
+        out.push_sql(")");
+        Ok(())
+    }
+}
+
+impl<Expr, QS> SelectableExpression<QS> for ConcatFunction<Vec<Expr>>
+where
+    ConcatFunction<Vec<Expr>>: AppearsOnTable<QS>,
+{
+}
+
+impl<Expr, QS> AppearsOnTable<QS> for ConcatFunction<Vec<Expr>>
+where
+    Expr: Expression<SqlType = Text> + AppearsOnTable<QS>,
+{
+}
+
+/// Creates a PostgreSQL `POSITION(substring IN string)` expression.
+///
+/// Returns the position of the first occurrence of substring in string.
+///
+/// # Examples
+///
+/// ```rust
+/// # use diesel_gaussdb::expression::functions::position;
+/// # use diesel::sql_types::Text;
+/// // POSITION('world' IN 'hello world')
+/// let pos = position(
+///     diesel::dsl::sql::<Text>("'world'"),
+///     diesel::dsl::sql::<Text>("'hello world'")
+/// );
+/// ```
+pub fn position<T, U>(substring: T, string: U) -> PositionFunction<T::Expression, U::Expression>
+where
+    T: AsExpression<Text>,
+    U: AsExpression<Text>,
+{
+    PositionFunction::new(substring.as_expression(), string.as_expression())
+}
+
+/// PostgreSQL `POSITION` function
+#[derive(Debug, Clone, QueryId, ValidGrouping)]
+pub struct PositionFunction<SubExpr, StrExpr> {
+    substring: SubExpr,
+    string: StrExpr,
+}
+
+impl<SubExpr, StrExpr> PositionFunction<SubExpr, StrExpr> {
+    fn new(substring: SubExpr, string: StrExpr) -> Self {
+        PositionFunction { substring, string }
+    }
+}
+
+impl<SubExpr, StrExpr> Expression for PositionFunction<SubExpr, StrExpr>
+where
+    SubExpr: Expression<SqlType = Text>,
+    StrExpr: Expression<SqlType = Text>,
+{
+    type SqlType = Integer;
+}
+
+impl<SubExpr, StrExpr> QueryFragment<GaussDB> for PositionFunction<SubExpr, StrExpr>
+where
+    SubExpr: QueryFragment<GaussDB>,
+    StrExpr: QueryFragment<GaussDB>,
+{
+    fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, GaussDB>) -> QueryResult<()> {
+        out.push_sql("POSITION(");
+        self.substring.walk_ast(out.reborrow())?;
+        out.push_sql(" IN ");
+        self.string.walk_ast(out.reborrow())?;
+        out.push_sql(")");
+        Ok(())
+    }
+}
+
+impl<SubExpr, StrExpr, QS> SelectableExpression<QS> for PositionFunction<SubExpr, StrExpr>
+where
+    PositionFunction<SubExpr, StrExpr>: AppearsOnTable<QS>,
+{
+}
+
+impl<SubExpr, StrExpr, QS> AppearsOnTable<QS> for PositionFunction<SubExpr, StrExpr>
+where
+    SubExpr: Expression<SqlType = Text> + AppearsOnTable<QS>,
+    StrExpr: Expression<SqlType = Text> + AppearsOnTable<QS>,
+{
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -330,6 +330,150 @@ where
 {
 }
 
+/// Creates a PostgreSQL `POWER(base, exponent)` expression.
+///
+/// Returns base raised to the power of exponent.
+///
+/// # Examples
+///
+/// ```rust
+/// # use diesel_gaussdb::expression::functions::power;
+/// # use diesel::sql_types::Double;
+/// // POWER(2, 3)
+/// let result = power(
+///     diesel::dsl::sql::<Double>("2"),
+///     diesel::dsl::sql::<Double>("3")
+/// );
+/// ```
+pub fn power<T, U>(base: T, exponent: U) -> PowerFunction<T::Expression, U::Expression>
+where
+    T: AsExpression<Double>,
+    U: AsExpression<Double>,
+{
+    PowerFunction::new(base.as_expression(), exponent.as_expression())
+}
+
+/// PostgreSQL `POWER` function
+#[derive(Debug, Clone, QueryId, ValidGrouping)]
+pub struct PowerFunction<BaseExpr, ExpExpr> {
+    base: BaseExpr,
+    exponent: ExpExpr,
+}
+
+impl<BaseExpr, ExpExpr> PowerFunction<BaseExpr, ExpExpr> {
+    fn new(base: BaseExpr, exponent: ExpExpr) -> Self {
+        PowerFunction { base, exponent }
+    }
+}
+
+impl<BaseExpr, ExpExpr> Expression for PowerFunction<BaseExpr, ExpExpr>
+where
+    BaseExpr: Expression<SqlType = Double>,
+    ExpExpr: Expression<SqlType = Double>,
+{
+    type SqlType = Double;
+}
+
+impl<BaseExpr, ExpExpr> QueryFragment<GaussDB> for PowerFunction<BaseExpr, ExpExpr>
+where
+    BaseExpr: QueryFragment<GaussDB>,
+    ExpExpr: QueryFragment<GaussDB>,
+{
+    fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, GaussDB>) -> QueryResult<()> {
+        out.push_sql("POWER(");
+        self.base.walk_ast(out.reborrow())?;
+        out.push_sql(", ");
+        self.exponent.walk_ast(out.reborrow())?;
+        out.push_sql(")");
+        Ok(())
+    }
+}
+
+impl<BaseExpr, ExpExpr, QS> SelectableExpression<QS> for PowerFunction<BaseExpr, ExpExpr>
+where
+    PowerFunction<BaseExpr, ExpExpr>: AppearsOnTable<QS>,
+{
+}
+
+impl<BaseExpr, ExpExpr, QS> AppearsOnTable<QS> for PowerFunction<BaseExpr, ExpExpr>
+where
+    BaseExpr: Expression<SqlType = Double> + AppearsOnTable<QS>,
+    ExpExpr: Expression<SqlType = Double> + AppearsOnTable<QS>,
+{
+}
+
+/// Creates a PostgreSQL `MOD(dividend, divisor)` expression.
+///
+/// Returns the remainder of dividend divided by divisor.
+///
+/// # Examples
+///
+/// ```rust
+/// # use diesel_gaussdb::expression::functions::mod_func;
+/// # use diesel::sql_types::Integer;
+/// // MOD(10, 3)
+/// let remainder = mod_func(
+///     diesel::dsl::sql::<Integer>("10"),
+///     diesel::dsl::sql::<Integer>("3")
+/// );
+/// ```
+pub fn mod_func<T, U>(dividend: T, divisor: U) -> ModFunction<T::Expression, U::Expression>
+where
+    T: AsExpression<Integer>,
+    U: AsExpression<Integer>,
+{
+    ModFunction::new(dividend.as_expression(), divisor.as_expression())
+}
+
+/// PostgreSQL `MOD` function
+#[derive(Debug, Clone, QueryId, ValidGrouping)]
+pub struct ModFunction<DivExpr, DivisorExpr> {
+    dividend: DivExpr,
+    divisor: DivisorExpr,
+}
+
+impl<DivExpr, DivisorExpr> ModFunction<DivExpr, DivisorExpr> {
+    fn new(dividend: DivExpr, divisor: DivisorExpr) -> Self {
+        ModFunction { dividend, divisor }
+    }
+}
+
+impl<DivExpr, DivisorExpr> Expression for ModFunction<DivExpr, DivisorExpr>
+where
+    DivExpr: Expression<SqlType = Integer>,
+    DivisorExpr: Expression<SqlType = Integer>,
+{
+    type SqlType = Integer;
+}
+
+impl<DivExpr, DivisorExpr> QueryFragment<GaussDB> for ModFunction<DivExpr, DivisorExpr>
+where
+    DivExpr: QueryFragment<GaussDB>,
+    DivisorExpr: QueryFragment<GaussDB>,
+{
+    fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, GaussDB>) -> QueryResult<()> {
+        out.push_sql("MOD(");
+        self.dividend.walk_ast(out.reborrow())?;
+        out.push_sql(", ");
+        self.divisor.walk_ast(out.reborrow())?;
+        out.push_sql(")");
+        Ok(())
+    }
+}
+
+impl<DivExpr, DivisorExpr, QS> SelectableExpression<QS> for ModFunction<DivExpr, DivisorExpr>
+where
+    ModFunction<DivExpr, DivisorExpr>: AppearsOnTable<QS>,
+{
+}
+
+impl<DivExpr, DivisorExpr, QS> AppearsOnTable<QS> for ModFunction<DivExpr, DivisorExpr>
+where
+    DivExpr: Expression<SqlType = Integer> + AppearsOnTable<QS>,
+    DivisorExpr: Expression<SqlType = Integer> + AppearsOnTable<QS>,
+{
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

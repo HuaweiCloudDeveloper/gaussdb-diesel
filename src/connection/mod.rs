@@ -7,6 +7,7 @@ pub mod raw;
 pub mod result;
 pub mod row;
 pub mod cursor;
+pub mod loading_mode;
 
 use diesel::connection::statement_cache::StatementCache;
 use diesel::connection::{
@@ -27,6 +28,10 @@ use gaussdb::{Client, Statement};
 pub use self::raw::RawConnection;
 
 pub use self::cursor::{GaussDBCursor, CursorDsl};
+pub use self::loading_mode::{
+    DefaultLoadingMode, GaussDBRowByRowLoadingMode, GaussDBRowIterator,
+    LoadingMode, LoadingModeDsl
+};
 
 /// A connection to a GaussDB database
 ///

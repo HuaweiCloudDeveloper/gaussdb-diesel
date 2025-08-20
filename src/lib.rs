@@ -46,7 +46,11 @@ pub mod value;
 
 // Re-export core types
 pub use backend::GaussDB;
-pub use connection::{GaussDBConnection, GaussDBCursor, CursorDsl};
+pub use connection::{
+    GaussDBConnection, GaussDBCursor, CursorDsl,
+    DefaultLoadingMode, GaussDBRowByRowLoadingMode, GaussDBRowIterator,
+    LoadingMode, LoadingModeDsl
+};
 pub use query_builder::GaussDBQueryBuilder;
 
 /// Data types for GaussDB
@@ -64,6 +68,8 @@ pub mod prelude {
     pub use crate::backend::GaussDB;
     pub use crate::connection::GaussDBConnection;
     pub use crate::query_builder::GaussDBQueryBuilder;
+    pub use crate::expression::array_ops::ArrayContainmentOps;
+    pub use crate::expression::expression_methods::GaussDBStringExpressionMethods;
 
     // Connection pool support
     #[cfg(feature = "r2d2")]
@@ -229,10 +235,8 @@ mod tests {
         use crate::expression::*;
 
         // Test that expression modules are accessible
-        array::array_placeholder();
         array_comparison::any_placeholder();
         array_comparison::all_placeholder();
-        expression_methods::expression_methods_placeholder();
         functions::functions_placeholder();
         operators::operators_placeholder();
         dsl::dsl_placeholder();
