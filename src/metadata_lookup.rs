@@ -7,6 +7,7 @@ use crate::backend::{FailedToLookupTypeError, InnerGaussDBTypeMetadata, GaussDB,
 use diesel::connection::{DefaultLoadingMode, LoadConnection};
 use diesel::prelude::*;
 use diesel::result::QueryResult;
+use diesel::sql_types::{Text, Integer, Bool};
 use diesel::define_sql_function;
 
 use std::borrow::Cow;
@@ -202,8 +203,108 @@ diesel::allow_tables_to_appear_in_same_query!(gaussdb_type, gaussdb_namespace);
 
 // GaussDB-specific functions
 
-
+// 获取当前临时模式的 OID
 define_sql_function!(fn gaussdb_my_temp_schema() -> diesel::sql_types::Oid);
+
+// 获取数据库版本信息
+define_sql_function!(fn version() -> diesel::sql_types::Text);
+
+// 获取当前数据库名称
+define_sql_function!(fn current_database() -> diesel::sql_types::Text);
+
+// 获取当前用户名
+define_sql_function!(fn current_user() -> diesel::sql_types::Text);
+
+// 获取会话用户名
+define_sql_function!(fn session_user() -> diesel::sql_types::Text);
+
+// 获取当前模式名称
+define_sql_function!(fn current_schema() -> diesel::sql_types::Text);
+
+/// 表存在性查询结果
+#[derive(Debug, diesel::QueryableByName)]
+struct TableExistsResult {
+    #[diesel(sql_type = Bool)]
+    exists: bool,
+}
+
+/// 检查表是否存在的辅助函数
+///
+/// 这个函数可以用来动态检查表的存在性，对于迁移和动态查询很有用
+pub fn table_exists(
+    conn: &mut crate::connection::GaussDBConnection,
+    table_name: &str,
+    schema_name: Option<&str>,
+) -> diesel::result::QueryResult<bool> {
+    use diesel::prelude::*;
+
+    let schema = schema_name.unwrap_or("public");
+
+    // 查询 information_schema.tables 来检查表是否存在
+    let query = diesel::sql_query(
+        "SELECT EXISTS (
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = $1 AND table_name = $2
+        ) as exists"
+    )
+    .bind::<Text, _>(schema)
+    .bind::<Text, _>(table_name);
+
+    // 执行查询并返回结果
+    let result: Vec<TableExistsResult> = query.load(conn)?;
+    Ok(result.first().map(|r| r.exists).unwrap_or(false))
+}
+
+/// 获取表的列信息
+///
+/// 返回指定表的所有列的详细信息，包括列名、数据类型、是否可空等
+pub fn get_table_columns(
+    conn: &mut crate::connection::GaussDBConnection,
+    table_name: &str,
+    schema_name: Option<&str>,
+) -> diesel::result::QueryResult<Vec<ColumnInfo>> {
+    use diesel::prelude::*;
+
+    let schema = schema_name.unwrap_or("public");
+
+    let query = diesel::sql_query(
+        "SELECT
+            column_name,
+            data_type,
+            is_nullable::boolean,
+            ordinal_position,
+            column_default
+        FROM information_schema.columns
+        WHERE table_schema = $1 AND table_name = $2
+        ORDER BY ordinal_position"
+    )
+    .bind::<Text, _>(schema)
+    .bind::<Text, _>(table_name);
+
+    query.load(conn)
+}
+
+/// 列信息结构体
+///
+/// 包含数据库表列的详细信息，用于动态查询和元数据分析
+#[derive(Debug, Clone, diesel::QueryableByName)]
+pub struct ColumnInfo {
+    /// 列名
+    #[diesel(sql_type = Text)]
+    pub column_name: String,
+    /// 数据类型
+    #[diesel(sql_type = Text)]
+    pub data_type: String,
+    /// 是否可为空
+    #[diesel(sql_type = Bool)]
+    pub is_nullable: bool,
+    /// 列在表中的位置
+    #[diesel(sql_type = Integer)]
+    pub ordinal_position: i32,
+    /// 列的默认值
+    #[diesel(sql_type = diesel::sql_types::Nullable<Text>)]
+    pub column_default: Option<String>,
+}
 
 #[cfg(test)]
 mod tests {
@@ -276,5 +377,25 @@ mod tests {
         
         assert_eq!(key1, key2);
         assert_ne!(key1, key3);
+    }
+
+    #[test]
+    fn test_column_info_structure() {
+        // 测试 ColumnInfo 结构体的创建和访问
+        let column = ColumnInfo {
+            column_name: "id".to_string(),
+            data_type: "integer".to_string(),
+            is_nullable: false,
+            ordinal_position: 1,
+            column_default: Some("nextval('seq')".to_string()),
+        };
+
+        assert_eq!(column.column_name, "id");
+        assert_eq!(column.data_type, "integer");
+        assert!(!column.is_nullable);
+        assert_eq!(column.ordinal_position, 1);
+        assert!(column.column_default.is_some());
+
+        println!("✅ ColumnInfo 结构体测试通过");
     }
 }
