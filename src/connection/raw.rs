@@ -7,7 +7,7 @@ use diesel::result::{ConnectionResult, Error as DieselError, DatabaseErrorKind};
 use std::fmt;
 
 #[cfg(feature = "gaussdb")]
-use gaussdb::{Client, Config, NoTls, Error as GaussDBError, Row, Statement};
+use gaussdb::Client;
 
 /// Raw connection to GaussDB database
 ///

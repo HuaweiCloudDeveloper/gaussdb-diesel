@@ -110,10 +110,10 @@ impl<'a> GaussDBRow<'a> {
     }
 
     /// Find the index of a column by name
-    fn find_column_index(&self, name: &str) -> Option<usize> {
+    fn find_column_index(&self, _name: &str) -> Option<usize> {
         #[cfg(feature = "gaussdb")]
         {
-            let row = match &self.inner {
+            let _row = match &self.inner {
                 GaussDBRowInner::Borrowed(row) => row,
                 GaussDBRowInner::Owned(row) => row,
             };
@@ -132,7 +132,7 @@ impl<'a> GaussDBRow<'a> {
     }
 
     /// Get the column name at the given index
-    fn column_name(&self, index: usize) -> Option<&str> {
+    fn column_name(&self, _index: usize) -> Option<&str> {
         #[cfg(feature = "gaussdb")]
         {
             // gaussdb crate doesn't expose column names directly
@@ -148,10 +148,10 @@ impl<'a> GaussDBRow<'a> {
     }
 
     /// Get the raw value at the given index
-    fn get_raw_value(&self, index: usize) -> Option<GaussDBValue<'_>> {
+    fn get_raw_value(&self, _index: usize) -> Option<GaussDBValue<'_>> {
         #[cfg(feature = "gaussdb")]
         {
-            let row = match &self.inner {
+            let _row = match &self.inner {
                 GaussDBRowInner::Borrowed(row) => row,
                 GaussDBRowInner::Owned(row) => row,
             };
@@ -291,7 +291,7 @@ impl TypeOidLookup for GaussDBField<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    // Tests will be added when row functionality is fully implemented
 
     #[test]
     #[cfg(not(feature = "gaussdb"))]
