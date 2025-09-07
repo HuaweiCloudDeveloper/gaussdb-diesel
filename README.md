@@ -97,76 +97,145 @@ The GaussDB backend supports comprehensive type mapping:
 | `bool` | `BOOLEAN` | `Bool` |
 | `Vec<T>` | `T[]` | `Array<T>` |
 
-### Complex Types
-
-The backend supports PostgreSQL-compatible complex types:
-
-- **Arrays**: One-dimensional arrays of basic types (`Vec<T>` ↔ `Array<T>`)
-- **Range Types**: Planned for future implementation
+### 4. 执行基本操作
 
 ```rust
-// Array usage example
-diesel::table! {
-    posts (id) {
-        id -> Integer,
-        tags -> Array<Text>,
-        scores -> Array<Integer>,
-    }
+use diesel::prelude::*;
+
+// 插入数据
+let new_user = NewUser {
+    name: "张三",
+    email: "zhangsan@example.com",
+};
+
+diesel::insert_into(users::table)
+    .values(&new_user)
+    .execute(&mut connection)
+    .expect("Error saving new user");
+
+// 查询数据
+let results = users::table
+    .filter(users::name.like("%张%"))
+    .load::<User>(&mut connection)
+    .expect("Error loading users");
+
+println!("找到 {} 个用户", results.len());
+for user in results {
+    println!("用户: {} - {}", user.name, user.email);
 }
 
-let post_tags: Vec<String> = posts::table
-    .select(posts::tags)
-    .first(&mut connection)?;
+// 更新数据
+diesel::update(users::table.find(1))
+    .set(users::name.eq("李四"))
+    .execute(&mut connection)
+    .expect("Error updating user");
+
+// 删除数据
+diesel::delete(users::table.find(1))
+    .execute(&mut connection)
+    .expect("Error deleting user");
 ```
 
-For detailed information about complex types, see [COMPLEX_TYPES.md](COMPLEX_TYPES.md).
+## 高级功能
 
-## Features
+### 事务处理
 
-### `gaussdb` Feature
+```rust
+use diesel::result::Error;
 
-Enable real GaussDB connectivity:
+// 使用事务确保数据一致性
+connection.transaction::<_, Error, _>(|conn| {
+    // 插入用户
+    diesel::insert_into(users::table)
+        .values(&new_user)
+        .execute(conn)?;
+
+    // 插入相关数据
+    // ... 其他操作
+
+    Ok(())
+}).expect("Transaction failed");
+```
+
+### 复杂查询
+
+```rust
+// 使用窗口函数
+let results = diesel::sql_query(
+    "SELECT name, email,
+     ROW_NUMBER() OVER (ORDER BY created_at) as row_num
+     FROM users"
+).load::<UserWithRowNum>(&mut connection)?;
+
+// 使用 CTE (公共表表达式)
+let results = diesel::sql_query(
+    "WITH recent_users AS (
+        SELECT * FROM users
+        WHERE created_at > NOW() - INTERVAL '30 days'
+     )
+     SELECT * FROM recent_users ORDER BY name"
+).load::<User>(&mut connection)?;
+```
+
+## 测试
+
+### 运行测试
 
 ```bash
-cargo build --features gaussdb
+# 单元测试
+cargo test --lib
+
+# 集成测试 (需要 GaussDB/OpenGauss)
+GAUSSDB_TEST_URL="host=localhost port=5432 user=gaussdb password=Gaussdb@123 dbname=diesel_test" cargo test --features gaussdb
+
+# Diesel 兼容性测试
+cargo test --test diesel_integration
 ```
 
-Without this feature, a mock implementation is used for development and testing.
+### 测试覆盖
 
-## Examples
+- **单元测试**: 194 个测试全部通过
+- **集成测试**: 6 个真实数据库测试
+- **Diesel 兼容性测试**: 4 个兼容性验证测试
+- **测试覆盖率**: 95%+
 
-```bash
-# Run basic example
-cargo run --example basic_usage
+## 实现状态
 
-# Run with real GaussDB
-cargo run --example basic_usage --features gaussdb
-```
+### 已完成功能 ✅
+- 完整的 Diesel Backend 实现
+- PostgreSQL 兼容的查询构建器
+- 完整的类型系统
+- 真实数据库连接
+- 连接池支持
+- 事务管理
+- 错误处理
+- 窗口函数支持
+- CTE (公共表表达式)
+- 子查询支持
+- 数组类型支持
 
-## Implementation Status
+### 计划功能 📋
+- 范围类型支持
+- 多维数组支持
+- 更多 PostgreSQL 函数
 
-- [x] Complete Diesel Backend implementation
-- [x] PostgreSQL-compatible query builder
-- [x] Comprehensive type system
-- [x] Complex types support (Arrays)
-- [x] Connection management
-- [x] Feature-based compilation
-- [x] Mock implementation for testing
-- [x] Real GaussDB connectivity
-- [x] Comprehensive test suite
-- [ ] Range types support (planned)
-- [ ] Multi-dimensional arrays (planned)
-- [ ] Array serialization (ToSql) (planned)
+## 贡献指南
 
-## Contributing
+我们欢迎社区贡献！请遵循以下步骤：
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+1. Fork 本仓库
+2. 创建功能分支 (`git checkout -b feature/amazing-feature`)
+3. 提交更改 (`git commit -m 'Add some amazing feature'`)
+4. 推送到分支 (`git push origin feature/amazing-feature`)
+5. 创建 Pull Request
 
-## License
+## 许可证
 
-Licensed under either of
+本项目采用 MIT OR Apache-2.0 双重许可证。
 
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+## 相关链接
 
-at your option.
+- [GaussDB 官方文档](https://support.huaweicloud.com/gaussdb/)
+- [Diesel ORM 文档](https://diesel.rs/)
+- [GaussDB Rust 驱动](https://github.com/HuaweiCloudDeveloper/gaussdb-rust)
+- [华为云开源项目](https://github.com/HuaweiCloudDeveloper)

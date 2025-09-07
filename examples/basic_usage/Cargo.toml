@@ -1,0 +1,14 @@
+[package]
+name = "basic_usage"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+diesel = { version = "2.2", features = ["chrono"] }
+diesel-gaussdb = { path = "../..", features = ["gaussdb"] }
+chrono = { version = "0.4", features = ["serde"] }
+tokio = { version = "1.0", features = ["full"] }
+
+[[bin]]
+name = "basic_usage"
+path = "src/main.rs"
