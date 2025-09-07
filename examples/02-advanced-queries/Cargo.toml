@@ -1,0 +1,32 @@
+[package]
+name = "diesel-gaussdb-advanced-queries"
+version = "0.1.0"
+edition = "2021"
+description = "Diesel-GaussDB 高级查询示例"
+authors = ["Huawei Cloud Developers"]
+
+[dependencies]
+diesel = { version = "2.2", features = ["chrono"] }
+diesel-gaussdb = { path = "../..", features = ["gaussdb"] }
+chrono = { version = "0.4", features = ["serde"] }
+anyhow = "1.0"
+env_logger = "0.10"
+log = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[[bin]]
+name = "advanced_queries"
+path = "src/main.rs"
+
+[[bin]]
+name = "window_functions"
+path = "src/window_functions.rs"
+
+[[bin]]
+name = "cte_queries"
+path = "src/cte_queries.rs"
+
+[[bin]]
+name = "subqueries"
+path = "src/subqueries.rs"
