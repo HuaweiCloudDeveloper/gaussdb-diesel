@@ -12,7 +12,7 @@ use diesel::expression::{
 };
 use diesel::query_builder::{AstPass, QueryFragment, QueryId};
 use diesel::result::QueryResult;
-use diesel::sql_types::{Date, Nullable, Time, Timestamp};
+use diesel::sql_types::{Date, Time, Timestamp};
 
 /// Represents the SQL `NOW()` function.
 ///

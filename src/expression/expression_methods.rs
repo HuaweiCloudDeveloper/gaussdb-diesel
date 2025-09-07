@@ -5,7 +5,7 @@
 
 use crate::backend::GaussDB;
 use diesel::expression::{Expression, AsExpression};
-use diesel::sql_types::{Text, Integer, Bool, Nullable};
+use diesel::sql_types::{Text, Bool};
 use diesel::query_builder::{QueryFragment, AstPass};
 use diesel::result::QueryResult;
 
@@ -153,6 +153,11 @@ pub struct ILike<L, R> {
 }
 
 impl<L, R> ILike<L, R> {
+    /// 创建新的不区分大小写的 LIKE 操作表达式
+    ///
+    /// # 参数
+    /// * `left` - 左操作数（要匹配的字符串表达式）
+    /// * `right` - 右操作数（匹配模式）
     pub fn new(left: L, right: R) -> Self {
         ILike { left, right }
     }
@@ -187,6 +192,11 @@ pub struct NotILike<L, R> {
 }
 
 impl<L, R> NotILike<L, R> {
+    /// 创建新的不区分大小写的 NOT LIKE 操作表达式
+    ///
+    /// # 参数
+    /// * `left` - 左操作数（要匹配的字符串表达式）
+    /// * `right` - 右操作数（匹配模式）
     pub fn new(left: L, right: R) -> Self {
         NotILike { left, right }
     }
@@ -221,6 +231,11 @@ pub struct RegexMatch<L, R> {
 }
 
 impl<L, R> RegexMatch<L, R> {
+    /// 创建新的正则表达式匹配操作表达式
+    ///
+    /// # 参数
+    /// * `left` - 左操作数（要匹配的字符串表达式）
+    /// * `right` - 右操作数（正则表达式模式）
     pub fn new(left: L, right: R) -> Self {
         RegexMatch { left, right }
     }
@@ -255,6 +270,11 @@ pub struct RegexMatchInsensitive<L, R> {
 }
 
 impl<L, R> RegexMatchInsensitive<L, R> {
+    /// 创建新的不区分大小写的正则表达式匹配操作表达式
+    ///
+    /// # 参数
+    /// * `left` - 左操作数（要匹配的字符串表达式）
+    /// * `right` - 右操作数（正则表达式模式）
     pub fn new(left: L, right: R) -> Self {
         RegexMatchInsensitive { left, right }
     }

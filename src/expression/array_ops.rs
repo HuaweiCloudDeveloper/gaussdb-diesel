@@ -131,6 +131,11 @@ pub struct Contains<L, R> {
 }
 
 impl<L, R> Contains<L, R> {
+    /// 创建新的数组包含操作表达式
+    ///
+    /// # 参数
+    /// * `left` - 左操作数（通常是数组）
+    /// * `right` - 右操作数（要检查的元素或数组）
     pub fn new(left: L, right: R) -> Self {
         Contains { left, right }
     }
@@ -165,6 +170,11 @@ pub struct IsContainedBy<L, R> {
 }
 
 impl<L, R> IsContainedBy<L, R> {
+    /// 创建新的"被包含"操作表达式
+    ///
+    /// # 参数
+    /// * `left` - 左操作数（要检查的元素或数组）
+    /// * `right` - 右操作数（包含的数组）
     pub fn new(left: L, right: R) -> Self {
         IsContainedBy { left, right }
     }
@@ -199,6 +209,11 @@ pub struct Overlaps<L, R> {
 }
 
 impl<L, R> Overlaps<L, R> {
+    /// 创建新的数组重叠操作表达式
+    ///
+    /// # 参数
+    /// * `left` - 左操作数（第一个数组）
+    /// * `right` - 右操作数（第二个数组）
     pub fn new(left: L, right: R) -> Self {
         Overlaps { left, right }
     }
@@ -228,7 +243,7 @@ where
 /// Additional array functions
 pub mod functions {
     use super::*;
-    use diesel::sql_types::{Integer, Text};
+    use diesel::sql_types::Integer;
 
     /// Get the length of an array
     ///
@@ -267,6 +282,11 @@ pub mod functions {
     }
 
     impl<E> ArrayLength<E> {
+        /// 创建新的数组长度函数表达式
+        ///
+        /// # 参数
+        /// * `array` - 要获取长度的数组表达式
+        /// * `dimension` - 数组维度（1表示第一维）
         pub fn new(array: E, dimension: i32) -> Self {
             ArrayLength { array, dimension }
         }
@@ -297,13 +317,12 @@ pub mod functions {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::backend::GaussDB;
-    use diesel::query_builder::QueryBuilder;
+    // Backend and QueryBuilder imports will be used when tests are fully implemented
 
     #[test]
     fn test_contains_operator_sql_generation() {
         // Test that the contains operator generates correct SQL
-        let mut query_builder = crate::query_builder::GaussDBQueryBuilder::new();
+        let mut _query_builder = crate::query_builder::GaussDBQueryBuilder::new();
         
         // This is a simplified test - in practice, we'd use actual column expressions
         // For now, we just test that the types compile correctly
@@ -313,7 +332,7 @@ mod tests {
     #[test]
     fn test_is_contained_by_operator_sql_generation() {
         // Test that the is_contained_by operator generates correct SQL
-        let mut query_builder = crate::query_builder::GaussDBQueryBuilder::new();
+        let _query_builder = crate::query_builder::GaussDBQueryBuilder::new();
         
         // This is a simplified test - in practice, we'd use actual column expressions
         assert!(true);
@@ -322,7 +341,7 @@ mod tests {
     #[test]
     fn test_overlaps_operator_sql_generation() {
         // Test that the overlaps operator generates correct SQL
-        let mut query_builder = crate::query_builder::GaussDBQueryBuilder::new();
+        let _query_builder = crate::query_builder::GaussDBQueryBuilder::new();
         
         // This is a simplified test - in practice, we'd use actual column expressions
         assert!(true);
@@ -331,7 +350,7 @@ mod tests {
     #[test]
     fn test_array_length_function() {
         // Test that the array_length function compiles correctly
-        use functions::array_length;
+        // array_length function will be tested when fully implemented
         
         // This is a compile-time test to ensure the function signature is correct
         fn _test_array_length_compilation() {

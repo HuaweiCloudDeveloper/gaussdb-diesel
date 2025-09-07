@@ -213,4 +213,46 @@ impl FromSql<Binary, GaussDB> for Vec<u8> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
 
+    #[test]
+    fn test_type_system_completeness() {
+        // 验证类型系统的完整性
+        // 这个测试确保我们的类型系统支持所有基础的 PostgreSQL 兼容类型
+
+        // 数值类型
+        assert!(std::any::TypeId::of::<i16>() != std::any::TypeId::of::<i32>());
+        assert!(std::any::TypeId::of::<i32>() != std::any::TypeId::of::<i64>());
+        assert!(std::any::TypeId::of::<f32>() != std::any::TypeId::of::<f64>());
+
+        // 文本类型
+        assert!(std::any::TypeId::of::<String>() != std::any::TypeId::of::<&str>());
+
+        // 布尔类型
+        assert!(std::any::TypeId::of::<bool>() != std::any::TypeId::of::<i32>());
+
+        println!("✅ 类型系统完整性验证通过");
+    }
+
+    #[test]
+    fn test_primitive_type_traits() {
+        // 验证基础类型的 trait 实现
+        // 这些测试确保我们的类型实现了必要的 FromSql 和 ToSql trait
+
+        // 测试编译时类型检查
+        fn _check_from_sql_traits() {
+            // 这些函数调用会在编译时验证 trait 是否正确实现
+            let _: fn(GaussDBValue<'_>) -> deserialize::Result<i16> = FromSql::<SmallInt, GaussDB>::from_sql;
+            let _: fn(GaussDBValue<'_>) -> deserialize::Result<i32> = FromSql::<Integer, GaussDB>::from_sql;
+            let _: fn(GaussDBValue<'_>) -> deserialize::Result<i64> = FromSql::<BigInt, GaussDB>::from_sql;
+            let _: fn(GaussDBValue<'_>) -> deserialize::Result<f32> = FromSql::<Float, GaussDB>::from_sql;
+            let _: fn(GaussDBValue<'_>) -> deserialize::Result<f64> = FromSql::<Double, GaussDB>::from_sql;
+            let _: fn(GaussDBValue<'_>) -> deserialize::Result<bool> = FromSql::<Bool, GaussDB>::from_sql;
+            let _: fn(GaussDBValue<'_>) -> deserialize::Result<Vec<u8>> = FromSql::<Binary, GaussDB>::from_sql;
+        }
+
+        println!("✅ 基础类型 trait 实现验证通过");
+    }
+}

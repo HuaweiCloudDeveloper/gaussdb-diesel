@@ -11,7 +11,7 @@ use diesel::expression::{
 };
 use diesel::query_builder::{AstPass, QueryFragment, QueryId};
 use diesel::result::QueryResult;
-use diesel::sql_types::{Double, Integer, Nullable};
+use diesel::sql_types::{Double, Integer};
 
 /// Creates a PostgreSQL `ABS(number)` expression.
 ///

@@ -4,22 +4,31 @@
 //! This module provides complete multirange type support compatible with PostgreSQL.
 
 use byteorder::{NetworkEndian, WriteBytesExt};
-use std::io::Write;
+// Write trait will be used for binary serialization
 use std::ops::Bound;
 
 use crate::backend::GaussDB;
 use diesel::serialize::{self, IsNull, Output, ToSql};
-use diesel::sql_types::*;
+// SQL types will be imported as needed
 use crate::types::sql_types::Multirange;
 
 /// Multirange type metadata for GaussDB
+///
+/// 存储多范围类型的元数据信息，包括类型 OID 和对应的数组类型 OID
 #[derive(Debug, Clone, Copy)]
 pub struct GaussDBMultirangeTypeMetadata {
+    /// 多范围类型的 OID
     pub oid: u32,
+    /// 对应数组类型的 OID
     pub array_oid: u32,
 }
 
 impl GaussDBMultirangeTypeMetadata {
+    /// 创建新的多范围类型元数据
+    ///
+    /// # 参数
+    /// * `oid` - 多范围类型的 OID
+    /// * `array_oid` - 对应数组类型的 OID
     pub const fn new(oid: u32, array_oid: u32) -> Self {
         Self { oid, array_oid }
     }
@@ -28,11 +37,18 @@ impl GaussDBMultirangeTypeMetadata {
 // Multirange type OIDs from PostgreSQL
 // from `SELECT oid, typname FROM pg_catalog.pg_type where typname LIKE '%multirange'`;
 // These are the standard PostgreSQL multirange type OIDs
+
+/// 日期多范围类型的 OID
 pub const DATEMULTIRANGE_OID: u32 = 4535;
+/// 4字节整数多范围类型的 OID
 pub const INT4MULTIRANGE_OID: u32 = 4451;
+/// 8字节整数多范围类型的 OID
 pub const INT8MULTIRANGE_OID: u32 = 4536;
+/// 数值多范围类型的 OID
 pub const NUMMULTIRANGE_OID: u32 = 4532;
+/// 时间戳多范围类型的 OID
 pub const TSMULTIRANGE_OID: u32 = 4533;
+/// 带时区时间戳多范围类型的 OID
 pub const TSTZMULTIRANGE_OID: u32 = 4534;
 /// Basic multirange support structure
 /// This provides the foundation for multirange types in GaussDB
