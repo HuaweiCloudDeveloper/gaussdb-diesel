@@ -73,8 +73,11 @@ impl CopyFromOptions {
 /// Represents a COPY FROM query
 #[derive(Debug)]
 pub struct CopyFromQuery<S, F> {
+    #[allow(dead_code)] // 将在 COPY FROM 完全实现时使用
     options: CopyFromOptions,
+    #[allow(dead_code)] // 将在 COPY FROM 完全实现时使用
     copy_callback: F,
+    #[allow(dead_code)] // 将在 COPY FROM 完全实现时使用
     p: PhantomData<S>,
 }
 
@@ -158,7 +161,9 @@ where
 
 /// Internal representation of a COPY FROM query
 pub(crate) struct InternalCopyFromQuery<S, T> {
+    #[allow(dead_code)] // 将在 COPY FROM 完全实现时使用
     pub(crate) target: S,
+    #[allow(dead_code)] // 将在 COPY FROM 完全实现时使用
     p: PhantomData<T>,
 }
 

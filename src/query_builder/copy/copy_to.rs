@@ -132,6 +132,7 @@ where
 
 /// Internal representation of a COPY TO command
 pub(crate) struct CopyToCommand<S> {
+    #[allow(dead_code)] // 将在 COPY TO 完全实现时使用
     pub(crate) target: S,
 }
 

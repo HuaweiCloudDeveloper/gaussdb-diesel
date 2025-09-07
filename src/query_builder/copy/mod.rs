@@ -7,7 +7,7 @@ use crate::backend::GaussDB;
 use diesel::query_builder::AstPass;
 use diesel::result::QueryResult;
 use diesel::sql_types::SqlType;
-use diesel::Table;
+// Table trait will be used when COPY operations are fully implemented
 
 pub mod copy_from;
 pub mod copy_to;
@@ -17,6 +17,7 @@ pub use self::copy_to::CopyToQuery;
 
 /// Magic header for PostgreSQL binary COPY format
 /// GaussDB uses the same format for compatibility
+#[allow(dead_code)] // 将在 COPY 操作完全实现时使用
 const COPY_MAGIC_HEADER: [u8; 11] = [
     0x50, 0x47, 0x43, 0x4F, 0x50, 0x59, 0x0A, 0xFF, 0x0D, 0x0A, 0x00,
 ];
@@ -173,7 +174,9 @@ pub trait CopyToDsl<Target> {
 /// Represents a COPY operation
 #[derive(Debug, Clone)]
 pub struct CopyOperation<T> {
+    #[allow(dead_code)] // 将在 COPY 操作完全实现时使用
     target: T,
+    #[allow(dead_code)] // 将在 COPY 操作完全实现时使用
     options: CommonOptions,
 }
 
