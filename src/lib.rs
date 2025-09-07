@@ -80,7 +80,7 @@ pub mod prelude {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    // Library-level tests will be added as needed
 
     #[test]
     fn test_query_builder_advanced_features() {
