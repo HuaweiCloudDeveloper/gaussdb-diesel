@@ -231,9 +231,12 @@ fn create_routes() -> Router {
         .route("/api/users", get(get_users))
         .route("/api/users", post(create_user))
         .route("/api/users/:id", get(get_user))
-        .route("/api/users/:id", post(update_user))
+        .route("/api/users/:id", axum::routing::put(update_user))
         .route("/api/users/:id", axum::routing::delete(delete_user))
+        .route("/api/users/search", get(search_users))
+        .route("/api/users/batch", post(batch_create_users))
         .route("/api/stats", get(user_stats))
+        .route("/api/stats/age-distribution", get(age_distribution))
 }
 
 #[tokio::main]
@@ -257,4 +260,128 @@ async fn main() -> Result<()> {
     axum::serve(listener, app).await?;
 
     Ok(())
+}
+
+/// 搜索用户
+async fn search_users(
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Result<Json<ApiResponse<Vec<User>>>, StatusCode> {
+    let mut conn = establish_connection()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let mut sql = "SELECT id, name, email, age FROM users WHERE 1=1".to_string();
+
+    if let Some(name) = params.get("name") {
+        sql.push_str(&format!(" AND name ILIKE '%{}%'", name));
+    }
+
+    if let Some(email) = params.get("email") {
+        sql.push_str(&format!(" AND email ILIKE '%{}%'", email));
+    }
+
+    if let Some(min_age) = params.get("min_age") {
+        if let Ok(age) = min_age.parse::<i32>() {
+            sql.push_str(&format!(" AND age >= {}", age));
+        }
+    }
+
+    if let Some(max_age) = params.get("max_age") {
+        if let Ok(age) = max_age.parse::<i32>() {
+            sql.push_str(&format!(" AND age <= {}", age));
+        }
+    }
+
+    sql.push_str(" ORDER BY id LIMIT 50");
+
+    let users: Vec<User> = diesel::sql_query(sql)
+        .load(&mut conn)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(ApiResponse::success(users)))
+}
+
+/// 批量创建用户
+async fn batch_create_users(
+    Json(users): Json<Vec<NewUser>>,
+) -> Result<Json<ApiResponse<String>>, StatusCode> {
+    let mut conn = establish_connection()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if users.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    if users.len() > 100 {
+        return Err(StatusCode::BAD_REQUEST); // 限制批量大小
+    }
+
+    let values: Vec<String> = users
+        .iter()
+        .map(|user| {
+            format!(
+                "('{}', '{}', {})",
+                user.name.replace("'", "''"), // 简单的 SQL 注入防护
+                user.email.replace("'", "''"),
+                user.age.map_or("NULL".to_string(), |a| a.to_string())
+            )
+        })
+        .collect();
+
+    let sql = format!(
+        "INSERT INTO users (name, email, age) VALUES {}",
+        values.join(", ")
+    );
+
+    let result = diesel::sql_query(sql).execute(&mut conn);
+
+    match result {
+        Ok(count) => Ok(Json(ApiResponse::success(format!("成功创建 {} 个用户", count)))),
+        Err(_) => Err(StatusCode::BAD_REQUEST),
+    }
+}
+
+/// 年龄分布统计
+async fn age_distribution() -> Result<Json<ApiResponse<serde_json::Value>>, StatusCode> {
+    let mut conn = establish_connection()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    #[derive(diesel::QueryableByName)]
+    struct AgeGroup {
+        #[diesel(sql_type = diesel::sql_types::Text)]
+        age_group: String,
+        #[diesel(sql_type = diesel::sql_types::BigInt)]
+        count: i64,
+    }
+
+    let distribution: Vec<AgeGroup> = diesel::sql_query(
+        "SELECT
+           CASE
+             WHEN age < 18 THEN '未成年'
+             WHEN age BETWEEN 18 AND 30 THEN '青年'
+             WHEN age BETWEEN 31 AND 50 THEN '中年'
+             WHEN age > 50 THEN '老年'
+             ELSE '未知'
+           END as age_group,
+           COUNT(*) as count
+         FROM users
+         WHERE age IS NOT NULL
+         GROUP BY age_group
+         ORDER BY
+           CASE
+             WHEN age < 18 THEN 1
+             WHEN age BETWEEN 18 AND 30 THEN 2
+             WHEN age BETWEEN 31 AND 50 THEN 3
+             WHEN age > 50 THEN 4
+             ELSE 5
+           END"
+    )
+    .load(&mut conn)
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let mut result = serde_json::Map::new();
+    for group in distribution {
+        result.insert(group.age_group, serde_json::Value::Number(group.count.into()));
+    }
+
+    Ok(Json(ApiResponse::success(serde_json::Value::Object(result))))
 }

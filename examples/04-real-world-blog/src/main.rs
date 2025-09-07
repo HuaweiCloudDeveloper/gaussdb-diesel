@@ -53,6 +53,30 @@ struct NewPost {
     author_id: i32,
 }
 
+/// 新评论结构
+#[derive(Debug, Deserialize)]
+struct NewComment {
+    content: String,
+    author_id: i32,
+}
+
+/// 评论结构
+#[derive(Debug, Serialize, Deserialize, diesel::QueryableByName)]
+struct Comment {
+    #[diesel(sql_type = diesel::sql_types::Integer)]
+    id: i32,
+    #[diesel(sql_type = diesel::sql_types::Integer)]
+    post_id: i32,
+    #[diesel(sql_type = diesel::sql_types::Integer)]
+    author_id: i32,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    content: String,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    author_name: String,
+}
+
+/// 新评论结构 (重复定义已删除)
+
 /// API 响应结构
 #[derive(Serialize)]
 struct ApiResponse<T> {
@@ -122,11 +146,23 @@ fn create_router() -> Router {
         .route("/api/posts", get(get_posts))
         .route("/api/posts", post(create_post))
         .route("/api/posts/:id", get(get_post))
+        .route("/api/posts/:id", axum::routing::put(update_post))
+        .route("/api/posts/:id", axum::routing::delete(delete_post))
+        .route("/api/posts/search", get(search_posts))
+        .route("/api/posts/:id/comments", get(get_post_comments))
+        .route("/api/posts/:id/comments", post(add_comment))
+
+        // 用户 API
         .route("/api/users", get(get_users))
         .route("/api/users/:id", get(get_user))
+        .route("/api/users/:id/posts", get(get_user_posts))
+
+        // 评论 API
+        .route("/api/comments/:id", axum::routing::delete(delete_comment))
 
         // 统计信息
         .route("/api/stats", get(blog_stats))
+        .route("/api/stats/popular-posts", get(popular_posts))
 }
 
 /// 健康检查
@@ -353,6 +389,209 @@ fn create_sample_data(conn: &mut GaussDBConnection) -> Result<()> {
 
     info!("✅ 示例数据创建完成");
     Ok(())
+}
+
+/// 新评论结构 (已在文件开头定义)
+
+/// 更新文章
+async fn update_post(
+    Path(post_id): Path<i32>,
+    Json(update_data): Json<NewPost>,
+) -> Result<Json<ApiResponse<String>>, StatusCode> {
+    let mut conn = establish_connection()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let result = diesel::sql_query(&format!(
+        "UPDATE posts SET title = '{}', content = '{}' WHERE id = {} AND published = true",
+        update_data.title.replace("'", "''"),
+        update_data.content.replace("'", "''"),
+        post_id
+    )).execute(&mut conn);
+
+    match result {
+        Ok(0) => Err(StatusCode::NOT_FOUND),
+        Ok(_) => Ok(Json(ApiResponse::success("文章更新成功".to_string()))),
+        Err(_) => Err(StatusCode::BAD_REQUEST),
+    }
+}
+
+/// 删除文章
+async fn delete_post(Path(post_id): Path<i32>) -> Result<Json<ApiResponse<String>>, StatusCode> {
+    let mut conn = establish_connection()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // 先删除相关评论
+    let _ = diesel::sql_query(&format!("DELETE FROM comments WHERE post_id = {}", post_id))
+        .execute(&mut conn);
+
+    let result = diesel::sql_query(&format!("DELETE FROM posts WHERE id = {}", post_id))
+        .execute(&mut conn);
+
+    match result {
+        Ok(0) => Err(StatusCode::NOT_FOUND),
+        Ok(_) => Ok(Json(ApiResponse::success("文章删除成功".to_string()))),
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
+/// 搜索文章
+async fn search_posts(
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Result<Json<ApiResponse<Vec<Post>>>, StatusCode> {
+    let mut conn = establish_connection()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let mut sql = "SELECT id, title, content, author_id, published FROM posts WHERE published = true".to_string();
+
+    if let Some(keyword) = params.get("q") {
+        sql.push_str(&format!(" AND (title ILIKE '%{}%' OR content ILIKE '%{}%')", keyword, keyword));
+    }
+
+    if let Some(author_id) = params.get("author_id") {
+        if let Ok(id) = author_id.parse::<i32>() {
+            sql.push_str(&format!(" AND author_id = {}", id));
+        }
+    }
+
+    sql.push_str(" ORDER BY id DESC LIMIT 20");
+
+    let posts: Vec<Post> = diesel::sql_query(sql)
+        .load(&mut conn)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(ApiResponse::success(posts)))
+}
+
+/// 获取文章评论
+async fn get_post_comments(Path(post_id): Path<i32>) -> Result<Json<ApiResponse<Vec<serde_json::Value>>>, StatusCode> {
+    let mut conn = establish_connection()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    #[derive(Debug, diesel::QueryableByName)]
+    struct CommentWithAuthor {
+        #[diesel(sql_type = diesel::sql_types::Integer)]
+        id: i32,
+        #[diesel(sql_type = diesel::sql_types::Text)]
+        content: String,
+        #[diesel(sql_type = diesel::sql_types::Text)]
+        author_name: String,
+    }
+
+    let comments: Vec<CommentWithAuthor> = diesel::sql_query(&format!(
+        "SELECT c.id, c.content, u.username as author_name
+         FROM comments c
+         JOIN users u ON c.author_id = u.id
+         WHERE c.post_id = {}
+         ORDER BY c.created_at ASC",
+        post_id
+    )).load(&mut conn)
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let result: Vec<serde_json::Value> = comments
+        .into_iter()
+        .map(|c| serde_json::json!({
+            "id": c.id,
+            "content": c.content,
+            "author_name": c.author_name
+        }))
+        .collect();
+
+    Ok(Json(ApiResponse::success(result)))
+}
+
+/// 添加评论
+async fn add_comment(
+    Path(post_id): Path<i32>,
+    Json(comment_data): Json<NewComment>,
+) -> Result<Json<ApiResponse<String>>, StatusCode> {
+    let mut conn = establish_connection()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let result = diesel::sql_query(&format!(
+        "INSERT INTO comments (post_id, author_id, content) VALUES ({}, {}, '{}')",
+        post_id,
+        comment_data.author_id,
+        comment_data.content.replace("'", "''")
+    )).execute(&mut conn);
+
+    match result {
+        Ok(_) => Ok(Json(ApiResponse::success("评论添加成功".to_string()))),
+        Err(_) => Err(StatusCode::BAD_REQUEST),
+    }
+}
+
+/// 获取用户文章
+async fn get_user_posts(Path(user_id): Path<i32>) -> Result<Json<ApiResponse<Vec<Post>>>, StatusCode> {
+    let mut conn = establish_connection()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let posts: Vec<Post> = diesel::sql_query(&format!(
+        "SELECT id, title, content, author_id, published
+         FROM posts
+         WHERE author_id = {} AND published = true
+         ORDER BY id DESC",
+        user_id
+    )).load(&mut conn)
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(ApiResponse::success(posts)))
+}
+
+/// 删除评论
+async fn delete_comment(Path(comment_id): Path<i32>) -> Result<Json<ApiResponse<String>>, StatusCode> {
+    let mut conn = establish_connection()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let result = diesel::sql_query(&format!("DELETE FROM comments WHERE id = {}", comment_id))
+        .execute(&mut conn);
+
+    match result {
+        Ok(0) => Err(StatusCode::NOT_FOUND),
+        Ok(_) => Ok(Json(ApiResponse::success("评论删除成功".to_string()))),
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
+/// 热门文章
+async fn popular_posts() -> Result<Json<ApiResponse<Vec<serde_json::Value>>>, StatusCode> {
+    let mut conn = establish_connection()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    #[derive(Debug, diesel::QueryableByName)]
+    struct PopularPost {
+        #[diesel(sql_type = diesel::sql_types::Integer)]
+        id: i32,
+        #[diesel(sql_type = diesel::sql_types::Text)]
+        title: String,
+        #[diesel(sql_type = diesel::sql_types::Text)]
+        author_name: String,
+        #[diesel(sql_type = diesel::sql_types::BigInt)]
+        comment_count: i64,
+    }
+
+    let popular: Vec<PopularPost> = diesel::sql_query(
+        "SELECT p.id, p.title, u.username as author_name, COUNT(c.id) as comment_count
+         FROM posts p
+         JOIN users u ON p.author_id = u.id
+         LEFT JOIN comments c ON p.id = c.post_id
+         WHERE p.published = true
+         GROUP BY p.id, p.title, u.username
+         ORDER BY comment_count DESC, p.id DESC
+         LIMIT 10"
+    ).load(&mut conn)
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let result: Vec<serde_json::Value> = popular
+        .into_iter()
+        .map(|p| serde_json::json!({
+            "id": p.id,
+            "title": p.title,
+            "author_name": p.author_name,
+            "comment_count": p.comment_count
+        }))
+        .collect();
+
+    Ok(Json(ApiResponse::success(result)))
 }
 
 

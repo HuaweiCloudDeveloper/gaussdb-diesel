@@ -312,6 +312,12 @@ fn main() -> Result<()> {
     // 事务性能测试
     results.push(test_transaction_performance(&mut connection)?);
 
+    // 并发性能测试
+    results.push(test_concurrent_performance(&mut connection)?);
+
+    // 索引性能测试
+    results.push(test_index_performance(&mut connection)?);
+
     // 输出所有测试结果
     info!("🎯 === 性能测试总结 ===");
     for result in &results {
@@ -331,4 +337,167 @@ fn main() -> Result<()> {
     
     info!("🎉 性能测试完成！");
     Ok(())
+}
+
+/// 测试并发性能
+fn test_concurrent_performance(conn: &mut GaussDBConnection) -> Result<PerformanceResult> {
+    info!("🔀 测试并发性能...");
+
+    #[derive(diesel::QueryableByName)]
+    struct TestUser {
+        #[diesel(sql_type = diesel::sql_types::Integer)]
+        id: i32,
+        #[diesel(sql_type = diesel::sql_types::Text)]
+        name: String,
+        #[diesel(sql_type = diesel::sql_types::Text)]
+        email: String,
+    }
+
+    // 模拟并发操作（在单线程中快速执行多个操作）
+    let concurrent_ops = 200;
+    let start_time = Instant::now();
+
+    for i in 0..concurrent_ops {
+        // 模拟并发读写操作
+        let _read_result: Vec<TestUser> = diesel::sql_query(
+            "SELECT id, name, email FROM test_users ORDER BY RANDOM() LIMIT 1"
+        ).load(conn)?;
+
+        if i % 10 == 0 {
+            // 每10次读操作执行一次写操作
+            diesel::sql_query(&format!(
+                "INSERT INTO test_users (name, email, age) VALUES ('并发用户{}', 'concurrent{}@example.com', {})",
+                i, i, 25 + (i % 20)
+            )).execute(conn)?;
+        }
+    }
+
+    let total_time = start_time.elapsed();
+    Ok(PerformanceResult::new("并发操作".to_string(), total_time, concurrent_ops))
+}
+
+/// 测试索引性能
+fn test_index_performance(conn: &mut GaussDBConnection) -> Result<PerformanceResult> {
+    info!("📇 测试索引性能...");
+
+    #[derive(diesel::QueryableByName)]
+    struct TestUser {
+        #[diesel(sql_type = diesel::sql_types::Integer)]
+        id: i32,
+        #[diesel(sql_type = diesel::sql_types::Text)]
+        name: String,
+        #[diesel(sql_type = diesel::sql_types::Text)]
+        email: String,
+    }
+
+    // 先测试无索引的查询性能
+    let query_count = 100;
+    let start_time = Instant::now();
+
+    for i in 0..query_count {
+        let _users: Vec<TestUser> = diesel::sql_query(&format!(
+            "SELECT id, name, email FROM test_users WHERE email = 'user{}@example.com'",
+            i % 50
+        )).load(conn)?;
+    }
+
+    let no_index_time = start_time.elapsed();
+
+    // 创建索引
+    diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_test_users_email_perf ON test_users(email)")
+        .execute(conn)?;
+
+    // 测试有索引的查询性能
+    let start_time = Instant::now();
+
+    for i in 0..query_count {
+        let _users: Vec<TestUser> = diesel::sql_query(&format!(
+            "SELECT id, name, email FROM test_users WHERE email = 'user{}@example.com'",
+            i % 50
+        )).load(conn)?;
+    }
+
+    let with_index_time = start_time.elapsed();
+
+    info!("  无索引查询时间: {:?}", no_index_time);
+    info!("  有索引查询时间: {:?}", with_index_time);
+
+    let improvement = no_index_time.as_secs_f64() / with_index_time.as_secs_f64();
+    info!("  索引性能提升: {:.2}x", improvement);
+
+    Ok(PerformanceResult::new("索引查询".to_string(), with_index_time, query_count))
+}
+
+/// 测试内存使用性能
+fn test_memory_performance(conn: &mut GaussDBConnection) -> Result<PerformanceResult> {
+    info!("💾 测试内存使用性能...");
+
+    #[derive(diesel::QueryableByName)]
+    struct TestUser {
+        #[diesel(sql_type = diesel::sql_types::Integer)]
+        id: i32,
+        #[diesel(sql_type = diesel::sql_types::Text)]
+        name: String,
+        #[diesel(sql_type = diesel::sql_types::Text)]
+        email: String,
+    }
+
+    let large_query_count = 50;
+    let start_time = Instant::now();
+
+    for _ in 0..large_query_count {
+        // 执行大结果集查询
+        let _users: Vec<TestUser> = diesel::sql_query(
+            "SELECT id, name, email FROM test_users ORDER BY id LIMIT 100"
+        ).load(conn)?;
+
+        // 立即释放内存（Rust 自动管理）
+    }
+
+    let total_time = start_time.elapsed();
+    Ok(PerformanceResult::new("大结果集查询".to_string(), total_time, large_query_count))
+}
+
+/// 测试数据类型性能
+fn test_data_type_performance(conn: &mut GaussDBConnection) -> Result<PerformanceResult> {
+    info!("🔢 测试数据类型性能...");
+
+    // 创建包含各种数据类型的测试表
+    diesel::sql_query(
+        "CREATE TABLE IF NOT EXISTS type_test (
+            id SERIAL PRIMARY KEY,
+            int_val INTEGER,
+            bigint_val BIGINT,
+            float_val REAL,
+            double_val DOUBLE PRECISION,
+            text_val TEXT,
+            bool_val BOOLEAN,
+            timestamp_val TIMESTAMP,
+            json_val JSON
+        )"
+    ).execute(conn)?;
+
+    let type_ops = 100;
+    let start_time = Instant::now();
+
+    for i in 0..type_ops {
+        diesel::sql_query(&format!(
+            "INSERT INTO type_test (int_val, bigint_val, float_val, double_val, text_val, bool_val, timestamp_val, json_val)
+             VALUES ({}, {}, {:.2}, {:.4}, '文本数据{}', {}, CURRENT_TIMESTAMP, '{}')",
+            i,
+            i as i64 * 1000,
+            i as f32 * 1.5,
+            i as f64 * 2.7182,
+            i,
+            i % 2 == 0,
+            format!("{{\"id\": {}, \"value\": \"test{}\"}}", i, i)
+        )).execute(conn)?;
+    }
+
+    let total_time = start_time.elapsed();
+
+    // 清理测试表
+    let _ = diesel::sql_query("DROP TABLE IF EXISTS type_test").execute(conn);
+
+    Ok(PerformanceResult::new("数据类型操作".to_string(), total_time, type_ops))
 }

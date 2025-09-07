@@ -127,6 +127,15 @@ fn main() -> Result<()> {
     // 演示事务处理
     demo_transactions(&mut connection)?;
 
+    // 演示数据验证
+    demo_data_validation(&mut connection)?;
+
+    // 演示错误处理
+    demo_error_handling(&mut connection)?;
+
+    // 演示批量操作
+    demo_batch_operations(&mut connection)?;
+
     info!("🎉 所有示例演示完成！");
     Ok(())
 }
@@ -253,6 +262,178 @@ fn demo_transactions(conn: &mut GaussDBConnection) -> Result<()> {
     for user in &transaction_users {
         info!("  事务用户: {}", user.name);
     }
+
+    Ok(())
+}
+
+/// 演示数据验证
+fn demo_data_validation(conn: &mut GaussDBConnection) -> Result<()> {
+    info!("\n✅ === 数据验证演示 ===");
+
+    // 1. 邮箱格式验证
+    info!("1. 邮箱格式验证...");
+
+    fn is_valid_email(email: &str) -> bool {
+        email.contains('@') && email.contains('.') && email.len() > 5
+    }
+
+    let test_emails = vec![
+        "valid@example.com",
+        "invalid-email",
+        "test@domain.co.uk",
+        "bad@",
+    ];
+
+    for email in test_emails {
+        if is_valid_email(email) {
+            info!("  ✅ 有效邮箱: {}", email);
+        } else {
+            info!("  ❌ 无效邮箱: {}", email);
+        }
+    }
+
+    // 2. 年龄范围验证
+    info!("\n2. 年龄范围验证...");
+    let test_ages = vec![15, 25, 35, 150, -5];
+
+    for age in test_ages {
+        if age >= 0 && age <= 120 {
+            info!("  ✅ 有效年龄: {}", age);
+        } else {
+            info!("  ❌ 无效年龄: {}", age);
+        }
+    }
+
+    Ok(())
+}
+
+/// 演示错误处理
+fn demo_error_handling(conn: &mut GaussDBConnection) -> Result<()> {
+    info!("\n🚨 === 错误处理演示 ===");
+
+    // 1. 处理重复键错误
+    info!("1. 处理重复键错误...");
+    let result = diesel::sql_query(
+        "INSERT INTO users (name, email, age) VALUES ('重复用户', 'zhangsan@example.com', 30)"
+    ).execute(conn);
+
+    match result {
+        Ok(_) => info!("  插入成功"),
+        Err(e) => {
+            info!("  ✅ 捕获到预期错误: {}", e);
+            info!("  这是正常的，因为邮箱可能已存在");
+        }
+    }
+
+    // 2. 处理 SQL 语法错误
+    info!("\n2. 处理 SQL 语法错误...");
+    let result = diesel::sql_query("INVALID SQL SYNTAX").execute(conn);
+
+    match result {
+        Ok(_) => info!("  执行成功"),
+        Err(e) => {
+            info!("  ✅ 捕获到 SQL 语法错误: {}", e);
+        }
+    }
+
+    // 3. 安全的查询执行
+    info!("\n3. 安全的查询执行...");
+
+    fn safe_get_user_by_id(conn: &mut GaussDBConnection, user_id: i32) -> Result<Option<UserResult>> {
+        let users: Vec<UserResult> = diesel::sql_query(&format!(
+            "SELECT id, name, email FROM users WHERE id = {} LIMIT 1",
+            user_id
+        )).load(conn)?;
+
+        Ok(users.into_iter().next())
+    }
+
+    match safe_get_user_by_id(conn, 1) {
+        Ok(Some(user)) => info!("  找到用户: {}", user.name),
+        Ok(None) => info!("  用户不存在"),
+        Err(e) => info!("  查询错误: {}", e),
+    }
+
+    Ok(())
+}
+
+/// 演示批量操作
+fn demo_batch_operations(conn: &mut GaussDBConnection) -> Result<()> {
+    info!("\n📦 === 批量操作演示 ===");
+
+    // 1. 批量插入
+    info!("1. 批量插入用户...");
+
+    let batch_users = (1..=5)
+        .map(|i| format!("('批量用户{}', 'batch{}@example.com', {})", i, i, 20 + i))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let sql = format!("INSERT INTO users (name, email, age) VALUES {}", batch_users);
+    let inserted_count = diesel::sql_query(sql).execute(conn)?;
+
+    info!("✅ 批量插入 {} 个用户", inserted_count);
+
+    // 2. 批量更新
+    info!("\n2. 批量更新用户年龄...");
+    let updated_count = diesel::sql_query(
+        "UPDATE users SET age = age + 1 WHERE name LIKE '批量用户%'"
+    ).execute(conn)?;
+
+    info!("✅ 批量更新 {} 个用户", updated_count);
+
+    // 3. 批量查询统计
+    info!("\n3. 批量查询统计...");
+
+    #[derive(Debug, diesel::QueryableByName)]
+    struct AgeStats {
+        #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Integer>)]
+        min_age: Option<i32>,
+        #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Integer>)]
+        max_age: Option<i32>,
+        #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Double>)]
+        avg_age: Option<f64>,
+        #[diesel(sql_type = diesel::sql_types::BigInt)]
+        total_users: i64,
+    }
+
+    let stats: Vec<AgeStats> = diesel::sql_query(
+        "SELECT MIN(age) as min_age, MAX(age) as max_age,
+                AVG(age::float) as avg_age, COUNT(*) as total_users
+         FROM users WHERE age IS NOT NULL"
+    ).load(conn)?;
+
+    if let Some(stats) = stats.first() {
+        info!("  用户统计信息:");
+        info!("    总用户数: {}", stats.total_users);
+        info!("    最小年龄: {:?}", stats.min_age);
+        info!("    最大年龄: {:?}", stats.max_age);
+        info!("    平均年龄: {:.1}", stats.avg_age.unwrap_or(0.0));
+    }
+
+    // 4. 分页查询
+    info!("\n4. 分页查询演示...");
+    let page_size = 3;
+    let page = 1;
+    let offset = (page - 1) * page_size;
+
+    let paged_users: Vec<UserResult> = diesel::sql_query(&format!(
+        "SELECT id, name, email FROM users ORDER BY id LIMIT {} OFFSET {}",
+        page_size, offset
+    )).load(conn)?;
+
+    info!("  第 {} 页用户 (每页 {} 条):", page, page_size);
+    for user in &paged_users {
+        info!("    ID: {}, 姓名: {}", user.id, user.name);
+    }
+
+    // 5. 条件批量删除
+    info!("\n5. 条件批量删除...");
+    let deleted_count = diesel::sql_query(
+        "DELETE FROM users WHERE name LIKE '批量用户%'"
+    ).execute(conn)?;
+
+    info!("✅ 批量删除 {} 个用户", deleted_count);
 
     Ok(())
 }
