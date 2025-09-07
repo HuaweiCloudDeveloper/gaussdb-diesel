@@ -18,15 +18,3 @@ serde_json = "1.0"
 [[bin]]
 name = "advanced_queries"
 path = "src/main.rs"
-
-[[bin]]
-name = "window_functions"
-path = "src/window_functions.rs"
-
-[[bin]]
-name = "cte_queries"
-path = "src/cte_queries.rs"
-
-[[bin]]
-name = "subqueries"
-path = "src/subqueries.rs"

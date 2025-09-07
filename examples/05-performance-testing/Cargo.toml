@@ -1,0 +1,38 @@
+[package]
+name = "diesel-gaussdb-performance"
+version = "0.1.0"
+edition = "2021"
+description = "Diesel-GaussDB 性能测试示例"
+authors = ["Huawei Cloud Developers"]
+
+[dependencies]
+# 数据库
+diesel = { version = "2.2", features = ["chrono"] }
+diesel-gaussdb = { path = "../..", features = ["gaussdb"] }
+
+# 时间处理
+chrono = { version = "0.4", features = ["serde"] }
+
+# 错误处理
+anyhow = "1.0"
+
+# 日志
+log = "0.4"
+env_logger = "0.10"
+
+# 性能测试
+criterion = { version = "0.5", features = ["html_reports"] }
+
+# 随机数生成
+rand = "0.9"
+
+# 统计
+statistical = "1.0"
+
+[[bin]]
+name = "performance_test"
+path = "src/main.rs"
+
+# [[bench]]
+# name = "database_benchmarks"
+# harness = false

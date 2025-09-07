@@ -4,206 +4,261 @@
 //! 构建高性能的 Web 应用程序。
 
 use axum::{
-    extract::Extension,
+    extract::Path,
     http::StatusCode,
     response::Json,
     routing::{get, post},
     Router,
 };
+use diesel::prelude::*;
+use diesel_gaussdb::GaussDBConnection;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::net::SocketAddr;
-use tower::ServiceBuilder;
-use tower_http::cors::CorsLayer;
+use anyhow::{Result, Context};
+use log::info;
+use std::env;
 
-mod config;
-mod database;
-mod error;
-mod models;
-mod handlers;
-mod services;
-mod schema;
+/// 博客文章结构
+#[derive(Debug, Serialize, Deserialize, diesel::QueryableByName)]
+struct Post {
+    #[diesel(sql_type = diesel::sql_types::Integer)]
+    id: i32,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    title: String,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    content: String,
+    #[diesel(sql_type = diesel::sql_types::Integer)]
+    author_id: i32,
+    #[diesel(sql_type = diesel::sql_types::Bool)]
+    published: bool,
+}
 
-use config::Config;
-use database::{create_pool, DbPool};
-use error::AppError;
+/// 用户结构
+#[derive(Debug, Serialize, Deserialize, diesel::QueryableByName)]
+struct User {
+    #[diesel(sql_type = diesel::sql_types::Integer)]
+    id: i32,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    username: String,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    email: String,
+}
 
-/// 应用状态
-#[derive(Clone)]
-pub struct AppState {
-    pub db_pool: DbPool,
-    pub config: Config,
+/// 新文章结构
+#[derive(Debug, Deserialize)]
+struct NewPost {
+    title: String,
+    content: String,
+    author_id: i32,
+}
+
+/// API 响应结构
+#[derive(Serialize)]
+struct ApiResponse<T> {
+    success: bool,
+    data: Option<T>,
+    message: String,
+}
+
+impl<T> ApiResponse<T> {
+    fn success(data: T) -> Self {
+        Self {
+            success: true,
+            data: Some(data),
+            message: "操作成功".to_string(),
+        }
+    }
+
+    fn error(message: String) -> ApiResponse<()> {
+        ApiResponse {
+            success: false,
+            data: None,
+            message,
+        }
+    }
+}
+
+/// 建立数据库连接
+fn establish_connection() -> Result<GaussDBConnection> {
+    let database_url = env::var("GAUSSDB_URL")
+        .unwrap_or_else(|_| {
+            "host=localhost port=5432 user=gaussdb password=Gaussdb@123 dbname=postgres".to_string()
+        });
+
+    GaussDBConnection::establish(&database_url)
+        .with_context(|| format!("Error connecting to {}", database_url))
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<()> {
     // 初始化日志
     env_logger::init();
-    log::info!("🚀 启动 Diesel-GaussDB 博客系统");
+    info!("🚀 启动 Diesel-GaussDB 博客系统");
 
-    // 加载配置
-    let config = Config::from_env()?;
-    log::info!("✅ 配置加载完成");
-
-    // 创建数据库连接池
-    let db_pool = create_pool(&config.database_url)?;
-    log::info!("✅ 数据库连接池创建完成");
-
-    // 初始化数据库表
-    initialize_database(&db_pool).await?;
-    log::info!("✅ 数据库初始化完成");
-
-    // 创建应用状态
-    let app_state = AppState {
-        db_pool,
-        config: config.clone(),
-    };
+    // 初始化数据库
+    initialize_database()?;
 
     // 构建路由
-    let app = create_router(app_state);
+    let app = create_router();
 
     // 启动服务器
-    let addr = SocketAddr::from(([0, 0, 0, 0], config.server_port));
-    log::info!("🌐 服务器启动在 http://{}", addr);
-    
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
-        .await?;
+    let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
+    info!("🌐 服务器启动在 http://{}", addr);
+
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(listener, app).await?;
 
     Ok(())
 }
 
 /// 创建路由
-fn create_router(state: AppState) -> Router {
+fn create_router() -> Router {
     Router::new()
         // 健康检查
         .route("/health", get(health_check))
-        
-        // API 路由
-        .nest("/api", api_routes())
-        
-        // Web 页面路由
-        .nest("/", web_routes())
-        
-        // 静态文件
-        .route("/static/*file", get(handlers::static_files))
-        
-        // 中间件
-        .layer(
-            ServiceBuilder::new()
-                .layer(CorsLayer::permissive())
-                .layer(Extension(state))
-        )
-}
 
-/// API 路由
-fn api_routes() -> Router {
-    Router::new()
-        // 认证路由
-        .nest("/auth", auth_routes())
-        
-        // 文章路由
-        .nest("/posts", post_routes())
-        
-        // 用户路由
-        .nest("/users", user_routes())
-        
-        // 评论路由
-        .nest("/comments", comment_routes())
-        
-        // 标签路由
-        .nest("/tags", tag_routes())
-}
+        // 博客 API
+        .route("/api/posts", get(get_posts))
+        .route("/api/posts", post(create_post))
+        .route("/api/posts/:id", get(get_post))
+        .route("/api/users", get(get_users))
+        .route("/api/users/:id", get(get_user))
 
-/// 认证路由
-fn auth_routes() -> Router {
-    Router::new()
-        .route("/register", post(handlers::auth::register))
-        .route("/login", post(handlers::auth::login))
-        .route("/logout", post(handlers::auth::logout))
-        .route("/me", get(handlers::auth::me))
-}
-
-/// 文章路由
-fn post_routes() -> Router {
-    Router::new()
-        .route("/", get(handlers::posts::list_posts))
-        .route("/", post(handlers::posts::create_post))
-        .route("/:id", get(handlers::posts::get_post))
-        .route("/:id", post(handlers::posts::update_post))
-        .route("/:id", post(handlers::posts::delete_post))
-        .route("/:id/comments", get(handlers::posts::get_post_comments))
-        .route("/:id/comments", post(handlers::posts::add_comment))
-        .route("/search", get(handlers::posts::search_posts))
-        .route("/popular", get(handlers::posts::popular_posts))
-}
-
-/// 用户路由
-fn user_routes() -> Router {
-    Router::new()
-        .route("/", get(handlers::users::list_users))
-        .route("/:id", get(handlers::users::get_user))
-        .route("/:id/posts", get(handlers::users::get_user_posts))
-        .route("/:id/stats", get(handlers::users::get_user_stats))
-}
-
-/// 评论路由
-fn comment_routes() -> Router {
-    Router::new()
-        .route("/:id", get(handlers::comments::get_comment))
-        .route("/:id", post(handlers::comments::update_comment))
-        .route("/:id", post(handlers::comments::delete_comment))
-}
-
-/// 标签路由
-fn tag_routes() -> Router {
-    Router::new()
-        .route("/", get(handlers::tags::list_tags))
-        .route("/", post(handlers::tags::create_tag))
-        .route("/:id", get(handlers::tags::get_tag))
-        .route("/:id/posts", get(handlers::tags::get_tag_posts))
-        .route("/popular", get(handlers::tags::popular_tags))
-}
-
-/// Web 页面路由
-fn web_routes() -> Router {
-    Router::new()
-        .route("/", get(handlers::web::index))
-        .route("/posts/:id", get(handlers::web::post_detail))
-        .route("/login", get(handlers::web::login_page))
-        .route("/register", get(handlers::web::register_page))
-        .route("/admin", get(handlers::web::admin_dashboard))
+        // 统计信息
+        .route("/api/stats", get(blog_stats))
 }
 
 /// 健康检查
-async fn health_check(Extension(state): Extension<AppState>) -> Result<Json<Value>, AppError> {
-    // 检查数据库连接
-    let mut conn = state.db_pool.get()
-        .map_err(|e| AppError::DatabaseError(e.to_string()))?;
-    
-    // 执行简单查询验证连接
-    use diesel::prelude::*;
-    let result: i32 = diesel::sql_query("SELECT 1 as test")
-        .get_result::<(i32,)>(&mut conn)
-        .map_err(|e| AppError::DatabaseError(e.to_string()))?
-        .0;
-    
-    if result != 1 {
-        return Err(AppError::DatabaseError("Health check failed".to_string()));
+async fn health_check() -> Json<ApiResponse<String>> {
+    Json(ApiResponse::success("博客系统运行正常".to_string()))
+}
+
+/// 获取所有文章
+async fn get_posts() -> Result<Json<ApiResponse<Vec<Post>>>, StatusCode> {
+    let mut conn = establish_connection()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let posts: Vec<Post> = diesel::sql_query(
+        "SELECT id, title, content, author_id, published FROM posts WHERE published = true ORDER BY id DESC"
+    )
+    .load(&mut conn)
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(ApiResponse::success(posts)))
+}
+
+/// 获取单篇文章
+async fn get_post(Path(post_id): Path<i32>) -> Result<Json<ApiResponse<Post>>, StatusCode> {
+    let mut conn = establish_connection()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let posts: Vec<Post> = diesel::sql_query(
+        "SELECT id, title, content, author_id, published FROM posts WHERE id = $1"
+    )
+    .bind::<diesel::sql_types::Integer, _>(post_id)
+    .load(&mut conn)
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    match posts.into_iter().next() {
+        Some(post) => Ok(Json(ApiResponse::success(post))),
+        None => Err(StatusCode::NOT_FOUND),
+    }
+}
+
+/// 创建新文章
+async fn create_post(Json(new_post): Json<NewPost>) -> Result<Json<ApiResponse<String>>, StatusCode> {
+    let mut conn = establish_connection()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let result = diesel::sql_query(
+        "INSERT INTO posts (title, content, author_id, published) VALUES ($1, $2, $3, true)"
+    )
+    .bind::<diesel::sql_types::Text, _>(&new_post.title)
+    .bind::<diesel::sql_types::Text, _>(&new_post.content)
+    .bind::<diesel::sql_types::Integer, _>(new_post.author_id)
+    .execute(&mut conn);
+
+    match result {
+        Ok(_) => Ok(Json(ApiResponse::success("文章创建成功".to_string()))),
+        Err(_) => Err(StatusCode::BAD_REQUEST),
+    }
+}
+
+/// 获取所有用户
+async fn get_users() -> Result<Json<ApiResponse<Vec<User>>>, StatusCode> {
+    let mut conn = establish_connection()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let users: Vec<User> = diesel::sql_query(
+        "SELECT id, username, email FROM users ORDER BY id"
+    )
+    .load(&mut conn)
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(ApiResponse::success(users)))
+}
+
+/// 获取单个用户
+async fn get_user(Path(user_id): Path<i32>) -> Result<Json<ApiResponse<User>>, StatusCode> {
+    let mut conn = establish_connection()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let users: Vec<User> = diesel::sql_query(
+        "SELECT id, username, email FROM users WHERE id = $1"
+    )
+    .bind::<diesel::sql_types::Integer, _>(user_id)
+    .load(&mut conn)
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    match users.into_iter().next() {
+        Some(user) => Ok(Json(ApiResponse::success(user))),
+        None => Err(StatusCode::NOT_FOUND),
+    }
+}
+
+/// 博客统计
+async fn blog_stats() -> Result<Json<ApiResponse<Value>>, StatusCode> {
+    let mut conn = establish_connection()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    #[derive(diesel::QueryableByName)]
+    struct BlogStats {
+        #[diesel(sql_type = diesel::sql_types::BigInt)]
+        total_posts: i64,
+        #[diesel(sql_type = diesel::sql_types::BigInt)]
+        published_posts: i64,
+        #[diesel(sql_type = diesel::sql_types::BigInt)]
+        total_users: i64,
     }
 
-    Ok(Json(json!({
-        "status": "healthy",
-        "database": "connected",
-        "timestamp": chrono::Utc::now().to_rfc3339()
-    })))
+    let stats: Vec<BlogStats> = diesel::sql_query(
+        "SELECT
+         (SELECT COUNT(*) FROM posts) as total_posts,
+         (SELECT COUNT(*) FROM posts WHERE published = true) as published_posts,
+         (SELECT COUNT(*) FROM users) as total_users"
+    )
+    .load(&mut conn)
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if let Some(stats) = stats.into_iter().next() {
+        let response = json!({
+            "total_posts": stats.total_posts,
+            "published_posts": stats.published_posts,
+            "total_users": stats.total_users
+        });
+        Ok(Json(ApiResponse::success(response)))
+    } else {
+        Err(StatusCode::INTERNAL_SERVER_ERROR)
+    }
 }
 
 /// 初始化数据库
-async fn initialize_database(pool: &DbPool) -> Result<(), Box<dyn std::error::Error>> {
-    let mut conn = pool.get()?;
-    
-    log::info!("初始化数据库表...");
-    
+fn initialize_database() -> Result<()> {
+    let mut conn = establish_connection()?;
+
+    info!("初始化数据库表...");
+
     // 创建用户表
     diesel::sql_query(
         "CREATE TABLE IF NOT EXISTS users (
@@ -211,11 +266,7 @@ async fn initialize_database(pool: &DbPool) -> Result<(), Box<dyn std::error::Er
             username VARCHAR UNIQUE NOT NULL,
             email VARCHAR UNIQUE NOT NULL,
             password_hash VARCHAR NOT NULL,
-            avatar_url VARCHAR,
-            bio TEXT,
-            is_admin BOOLEAN DEFAULT FALSE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )"
     ).execute(&mut conn)?;
 
@@ -224,14 +275,11 @@ async fn initialize_database(pool: &DbPool) -> Result<(), Box<dyn std::error::Er
         "CREATE TABLE IF NOT EXISTS posts (
             id SERIAL PRIMARY KEY,
             title VARCHAR NOT NULL,
-            slug VARCHAR UNIQUE NOT NULL,
             content TEXT NOT NULL,
-            excerpt TEXT,
             author_id INTEGER NOT NULL,
             published BOOLEAN DEFAULT FALSE,
             view_count INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP,
             FOREIGN KEY (author_id) REFERENCES users(id)
         )"
     ).execute(&mut conn)?;
@@ -242,117 +290,69 @@ async fn initialize_database(pool: &DbPool) -> Result<(), Box<dyn std::error::Er
             id SERIAL PRIMARY KEY,
             post_id INTEGER NOT NULL,
             author_id INTEGER NOT NULL,
-            parent_id INTEGER,
             content TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (post_id) REFERENCES posts(id),
-            FOREIGN KEY (author_id) REFERENCES users(id),
-            FOREIGN KEY (parent_id) REFERENCES comments(id)
+            FOREIGN KEY (author_id) REFERENCES users(id)
         )"
     ).execute(&mut conn)?;
-
-    // 创建标签表
-    diesel::sql_query(
-        "CREATE TABLE IF NOT EXISTS tags (
-            id SERIAL PRIMARY KEY,
-            name VARCHAR UNIQUE NOT NULL,
-            slug VARCHAR UNIQUE NOT NULL,
-            description TEXT,
-            color VARCHAR,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )"
-    ).execute(&mut conn)?;
-
-    // 创建文章标签关联表
-    diesel::sql_query(
-        "CREATE TABLE IF NOT EXISTS post_tags (
-            id SERIAL PRIMARY KEY,
-            post_id INTEGER NOT NULL,
-            tag_id INTEGER NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (post_id) REFERENCES posts(id),
-            FOREIGN KEY (tag_id) REFERENCES tags(id),
-            UNIQUE(post_id, tag_id)
-        )"
-    ).execute(&mut conn)?;
-
-    // 创建索引
-    create_indexes(&mut conn)?;
 
     // 创建示例数据
     create_sample_data(&mut conn)?;
 
-    log::info!("✅ 数据库初始化完成");
-    Ok(())
-}
-
-/// 创建数据库索引
-fn create_indexes(conn: &mut diesel_gaussdb::GaussDBConnection) -> Result<(), diesel::result::Error> {
-    use diesel::prelude::*;
-    
-    // 文章索引
-    diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_posts_published_created ON posts(published, created_at DESC)").execute(conn)?;
-    diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_posts_author_published ON posts(author_id, published)").execute(conn)?;
-    diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_posts_slug ON posts(slug)").execute(conn)?;
-    
-    // 评论索引
-    diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_comments_post_created ON comments(post_id, created_at)").execute(conn)?;
-    diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_comments_author ON comments(author_id)").execute(conn)?;
-    
-    // 标签索引
-    diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_post_tags_post ON post_tags(post_id)").execute(conn)?;
-    diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_post_tags_tag ON post_tags(tag_id)").execute(conn)?;
-    
+    info!("✅ 数据库初始化完成");
     Ok(())
 }
 
 /// 创建示例数据
-fn create_sample_data(conn: &mut diesel_gaussdb::GaussDBConnection) -> Result<(), diesel::result::Error> {
-    use diesel::prelude::*;
-    
+fn create_sample_data(conn: &mut GaussDBConnection) -> Result<()> {
     // 检查是否已有数据
-    let user_count: i64 = diesel::sql_query("SELECT COUNT(*) as count FROM users")
-        .get_result::<(i64,)>(conn)?
-        .0;
-    
-    if user_count > 0 {
-        log::info!("示例数据已存在，跳过创建");
-        return Ok(());
+    #[derive(diesel::QueryableByName)]
+    struct Count {
+        #[diesel(sql_type = diesel::sql_types::BigInt)]
+        count: i64,
     }
-    
-    log::info!("创建示例数据...");
-    
-    // 创建管理员用户
+
+    let user_count: Vec<Count> = diesel::sql_query("SELECT COUNT(*) as count FROM users")
+        .load(conn)?;
+
+    if let Some(count) = user_count.first() {
+        if count.count > 0 {
+            info!("示例数据已存在，跳过创建");
+            return Ok(());
+        }
+    }
+
+    info!("创建示例数据...");
+
+    // 创建示例用户
     diesel::sql_query(
-        "INSERT INTO users (username, email, password_hash, is_admin, bio) VALUES 
-         ('admin', 'admin@blog.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj/RK.s5uIfa', true, '系统管理员'),
-         ('author1', 'author1@blog.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj/RK.s5uIfa', false, '技术博主'),
-         ('user1', 'user1@blog.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj/RK.s5uIfa', false, '普通用户')"
+        "INSERT INTO users (username, email, password_hash) VALUES
+         ('admin', 'admin@blog.com', 'hashed_password_1'),
+         ('author1', 'author1@blog.com', 'hashed_password_2'),
+         ('user1', 'user1@blog.com', 'hashed_password_3')"
     ).execute(conn)?;
-    
-    // 创建标签
-    diesel::sql_query(
-        "INSERT INTO tags (name, slug, description, color) VALUES 
-         ('Rust', 'rust', 'Rust 编程语言相关内容', '#f74c00'),
-         ('数据库', 'database', '数据库技术和最佳实践', '#336791'),
-         ('Web开发', 'web-dev', 'Web 开发技术和框架', '#61dafb'),
-         ('教程', 'tutorial', '技术教程和指南', '#28a745')"
-    ).execute(conn)?;
-    
+
     // 创建示例文章
     diesel::sql_query(
-        "INSERT INTO posts (title, slug, content, excerpt, author_id, published, view_count) VALUES 
-         ('Rust 编程语言入门指南', 'rust-getting-started', 
-          'Rust 是一门系统编程语言，专注于安全、速度和并发。本文将带你了解 Rust 的基础概念...', 
-          'Rust 编程语言的完整入门指南', 2, true, 150),
-         ('使用 Diesel 操作 GaussDB 数据库', 'diesel-gaussdb-guide',
-          '本文介绍如何使用 Diesel ORM 框架操作 GaussDB 数据库，包括连接配置、模型定义等...', 
-          '完整的 Diesel-GaussDB 使用指南', 2, true, 89),
-         ('现代 Web 开发最佳实践', 'modern-web-dev-practices',
-          '现代 Web 开发涉及众多技术栈，本文总结了一些最佳实践和常用模式...', 
-          'Web 开发的最佳实践总结', 2, true, 67)"
+        "INSERT INTO posts (title, content, author_id, published) VALUES
+         ('欢迎来到我们的博客', '这是我们博客的第一篇文章，欢迎大家！', 1, true),
+         ('Rust 编程语言介绍', 'Rust 是一门系统编程语言，专注于安全、速度和并发...', 2, true),
+         ('数据库设计最佳实践', '本文介绍了数据库设计的一些最佳实践和常见模式...', 2, true),
+         ('草稿文章', '这是一篇草稿文章，尚未发布...', 1, false)"
     ).execute(conn)?;
-    
-    log::info!("✅ 示例数据创建完成");
+
+    // 创建示例评论
+    diesel::sql_query(
+        "INSERT INTO comments (post_id, author_id, content) VALUES
+         (1, 2, '很棒的博客，期待更多内容！'),
+         (1, 3, '感谢分享，学到了很多。'),
+         (2, 1, 'Rust 确实是一门很有前途的语言。'),
+         (3, 3, '数据库设计很重要，谢谢分享经验。')"
+    ).execute(conn)?;
+
+    info!("✅ 示例数据创建完成");
     Ok(())
 }
+
+
