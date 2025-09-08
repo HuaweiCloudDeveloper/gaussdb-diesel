@@ -272,6 +272,67 @@ impl SimpleConnection for GaussDBConnection {
     }
 }
 
+impl GaussDBConnection {
+    /// Establish an async connection to GaussDB
+    ///
+    /// This method should be used in async contexts to avoid runtime conflicts.
+    /// It uses tokio-gaussdb for async connection establishment.
+    #[cfg(feature = "tokio-gaussdb")]
+    pub async fn establish_async(database_url: &str) -> ConnectionResult<Self> {
+        use tokio_gaussdb::{Config, NoTls};
+        use std::str::FromStr;
+
+        let config = Config::from_str(database_url)
+            .map_err(|e| diesel::ConnectionError::CouldntSetupConfiguration(DieselError::DatabaseError(
+                diesel::result::DatabaseErrorKind::UnableToSendCommand,
+                Box::new(format!("Invalid database URL: {}", e))
+            )))?;
+
+        let (client, connection) = config.connect(NoTls).await
+            .map_err(|e| diesel::ConnectionError::CouldntSetupConfiguration(DieselError::DatabaseError(
+                diesel::result::DatabaseErrorKind::UnableToSendCommand,
+                Box::new(format!("Failed to connect to GaussDB: {}", e))
+            )))?;
+
+        // Spawn the connection task
+        tokio::spawn(async move {
+            if let Err(e) = connection.await {
+                eprintln!("Connection error: {}", e);
+            }
+        });
+
+        let transaction_manager = AnsiTransactionManager::default();
+
+        // Create a simple instrumentation implementation
+        struct SimpleInstrumentation;
+        impl Instrumentation for SimpleInstrumentation {
+            fn on_connection_event(&mut self, _event: diesel::connection::InstrumentationEvent<'_>) {}
+        }
+
+        let instrumentation = Box::new(SimpleInstrumentation);
+
+        // For now, we need to create a wrapper that can work with the existing sync interface
+        // This is a temporary solution until we can fully support async operations
+        // We'll create a mock client that can be used for basic operations
+        let sync_client = {
+            // Create a placeholder client - this needs to be improved
+            // For now, we'll return an error indicating async connections need more work
+            return Err(diesel::ConnectionError::CouldntSetupConfiguration(DieselError::DatabaseError(
+                diesel::result::DatabaseErrorKind::UnableToSendCommand,
+                Box::new("Async connections are not fully implemented yet. Use establish() in spawn_blocking.".to_string())
+            )));
+        };
+
+        Ok(GaussDBConnection {
+            raw_connection: sync_client,
+            transaction_manager,
+            instrumentation,
+            statement_cache: StatementCache::new(),
+            metadata_cache: GaussDBMetadataCache::new(),
+        })
+    }
+}
+
 impl Connection for GaussDBConnection {
     type Backend = GaussDB;
     type TransactionManager = diesel::connection::AnsiTransactionManager;
