@@ -72,12 +72,19 @@ fn setup_sample_data(conn: &mut GaussDBConnection) -> Result<()> {
     // 创建表
     create_tables(conn)?;
 
-    // 清理现有数据
+    // 清理现有数据 (按外键依赖顺序删除)
     diesel::sql_query("DELETE FROM post_tags").execute(conn)?;
     diesel::sql_query("DELETE FROM comments").execute(conn)?;
     diesel::sql_query("DELETE FROM posts").execute(conn)?;
     diesel::sql_query("DELETE FROM tags").execute(conn)?;
     diesel::sql_query("DELETE FROM users").execute(conn)?;
+
+    // 重置序列
+    diesel::sql_query("ALTER SEQUENCE users_id_seq RESTART WITH 1").execute(conn)?;
+    diesel::sql_query("ALTER SEQUENCE posts_id_seq RESTART WITH 1").execute(conn)?;
+    diesel::sql_query("ALTER SEQUENCE tags_id_seq RESTART WITH 1").execute(conn)?;
+    diesel::sql_query("ALTER SEQUENCE comments_id_seq RESTART WITH 1").execute(conn)?;
+    diesel::sql_query("ALTER SEQUENCE post_tags_id_seq RESTART WITH 1").execute(conn)?;
 
     // 创建用户
     diesel::sql_query(

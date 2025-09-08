@@ -211,11 +211,15 @@ fn demo_basic_crud(conn: &mut GaussDBConnection) -> Result<()> {
     info!("✅ 成功删除 {} 个用户", deleted_count);
 
     // 最终统计
-    let final_count: CountResult = diesel::sql_query(
+    let final_count_results: Vec<CountResult> = diesel::sql_query(
         "SELECT COUNT(*) as count FROM users"
-    ).get_result(conn)?;
+    ).load(conn)?;
 
-    info!("✅ 最终用户数量: {}", final_count.count);
+    if let Some(final_count) = final_count_results.first() {
+        info!("✅ 最终用户数量: {}", final_count.count);
+    } else {
+        info!("✅ 最终用户数量: 0");
+    }
 
     Ok(())
 }
