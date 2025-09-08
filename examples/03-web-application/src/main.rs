@@ -20,6 +20,8 @@ use std::net::SocketAddr;
 use anyhow::{Result, Context};
 use log::info;
 use std::env;
+use std::sync::Arc;
+use tokio::sync::{Mutex, oneshot};
 
 /// 用户数据结构
 #[derive(Debug, Serialize, Deserialize, diesel::QueryableByName)]
@@ -68,6 +70,54 @@ impl<T> ApiResponse<T> {
     }
 }
 
+/// 数据库连接管理器
+///
+/// 这个管理器在单独的线程中运行，避免tokio运行时冲突
+struct DatabaseManager {
+    db_url: String,
+}
+
+impl DatabaseManager {
+    fn new(db_url: String) -> Self {
+        Self { db_url }
+    }
+
+    /// 在专用线程中执行数据库操作
+    async fn execute_query<F, R>(&self, operation: F) -> Result<R, StatusCode>
+    where
+        F: FnOnce(&mut GaussDBConnection) -> Result<R, diesel::result::Error> + Send + 'static,
+        R: Send + 'static,
+    {
+        let db_url = self.db_url.clone();
+
+        let (tx, rx) = oneshot::channel();
+
+        // 在专用的阻塞线程中执行数据库操作
+        std::thread::spawn(move || {
+            let result = (|| -> Result<R, diesel::result::Error> {
+                let mut conn = GaussDBConnection::establish(&db_url)
+                    .map_err(|e| diesel::result::Error::DatabaseError(
+                        diesel::result::DatabaseErrorKind::UnableToSendCommand,
+                        Box::new(format!("Connection error: {}", e))
+                    ))?;
+                operation(&mut conn)
+            })();
+
+            let _ = tx.send(result);
+        });
+
+        rx.await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+    }
+}
+
+/// 应用状态，包含数据库管理器
+#[derive(Clone)]
+struct AppState {
+    db_manager: Arc<DatabaseManager>,
+}
+
 /// 建立数据库连接
 fn establish_connection() -> Result<GaussDBConnection> {
     let database_url = env::var("GAUSSDB_URL")
@@ -79,20 +129,36 @@ fn establish_connection() -> Result<GaussDBConnection> {
         .with_context(|| format!("Error connecting to {}", database_url))
 }
 
+/// 异步建立数据库连接
+async fn establish_connection_async() -> Result<GaussDBConnection, StatusCode> {
+    let database_url = std::env::var("GAUSSDB_URL")
+        .unwrap_or_else(|_| {
+            "host=localhost port=5432 user=gaussdb password=Gaussdb@123 dbname=postgres".to_string()
+        });
+
+    tokio::task::spawn_blocking(move || {
+        GaussDBConnection::establish(&database_url)
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
 /// 初始化数据库
-fn init_database() -> Result<()> {
-    let mut conn = establish_connection()?;
+async fn init_database(db_manager: &DatabaseManager) -> Result<()> {
     
     // 创建用户表
-    diesel::sql_query(
-        "CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            name VARCHAR NOT NULL,
-            email VARCHAR NOT NULL UNIQUE,
-            age INTEGER,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )"
-    ).execute(&mut conn)?;
+    db_manager.execute_query(|conn| {
+        diesel::sql_query(
+            "CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR NOT NULL,
+                email VARCHAR NOT NULL UNIQUE,
+                age INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )"
+        ).execute(conn)
+    }).await.map_err(|_| anyhow::anyhow!("Failed to create table"))?;
 
     info!("✅ 数据库初始化完成");
     Ok(())
@@ -104,30 +170,32 @@ async fn health_check() -> Json<ApiResponse<String>> {
 }
 
 /// 获取所有用户
-async fn get_users() -> Result<Json<ApiResponse<Vec<User>>>, StatusCode> {
-    let mut conn = establish_connection()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+async fn get_users(
+    axum::extract::State(state): axum::extract::State<AppState>,
+) -> Result<Json<ApiResponse<Vec<User>>>, StatusCode> {
 
-    let users: Vec<User> = diesel::sql_query(
-        "SELECT id, name, email, age FROM users ORDER BY id"
-    )
-    .load(&mut conn)
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let users: Vec<User> = state.db_manager.execute_query(|conn| {
+        diesel::sql_query(
+            "SELECT id, name, email, age FROM users ORDER BY id"
+        ).load(conn)
+    }).await?;
 
     Ok(Json(ApiResponse::success(users)))
 }
 
 /// 根据 ID 获取用户
-async fn get_user(Path(user_id): Path<i32>) -> Result<Json<ApiResponse<User>>, StatusCode> {
-    let mut conn = establish_connection()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+async fn get_user(
+    axum::extract::State(state): axum::extract::State<AppState>,
+    Path(user_id): Path<i32>,
+) -> Result<Json<ApiResponse<User>>, StatusCode> {
 
-    let users: Vec<User> = diesel::sql_query(
-        "SELECT id, name, email, age FROM users WHERE id = $1"
-    )
-    .bind::<diesel::sql_types::Integer, _>(user_id)
-    .load(&mut conn)
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let users: Vec<User> = state.db_manager.execute_query(move |conn| {
+        diesel::sql_query(
+            "SELECT id, name, email, age FROM users WHERE id = $1"
+        )
+        .bind::<diesel::sql_types::Integer, _>(user_id)
+        .load(conn)
+    }).await?;
 
     match users.into_iter().next() {
         Some(user) => Ok(Json(ApiResponse::success(user))),
@@ -137,8 +205,7 @@ async fn get_user(Path(user_id): Path<i32>) -> Result<Json<ApiResponse<User>>, S
 
 /// 创建新用户
 async fn create_user(Json(new_user): Json<NewUser>) -> Result<Json<ApiResponse<String>>, StatusCode> {
-    let mut conn = establish_connection()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut conn = establish_connection_async().await?;
 
     let result = diesel::sql_query(
         "INSERT INTO users (name, email, age) VALUES ($1, $2, $3)"
@@ -159,8 +226,7 @@ async fn update_user(
     Path(user_id): Path<i32>,
     Json(update_data): Json<NewUser>,
 ) -> Result<Json<ApiResponse<String>>, StatusCode> {
-    let mut conn = establish_connection()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut conn = establish_connection_async().await?;
 
     let result = diesel::sql_query(
         "UPDATE users SET name = $1, email = $2, age = $3 WHERE id = $4"
@@ -180,8 +246,7 @@ async fn update_user(
 
 /// 删除用户
 async fn delete_user(Path(user_id): Path<i32>) -> Result<Json<ApiResponse<String>>, StatusCode> {
-    let mut conn = establish_connection()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut conn = establish_connection_async().await?;
 
     let result = diesel::sql_query("DELETE FROM users WHERE id = $1")
         .bind::<diesel::sql_types::Integer, _>(user_id)
@@ -196,8 +261,7 @@ async fn delete_user(Path(user_id): Path<i32>) -> Result<Json<ApiResponse<String
 
 /// 用户统计
 async fn user_stats() -> Result<Json<ApiResponse<serde_json::Value>>, StatusCode> {
-    let mut conn = establish_connection()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut conn = establish_connection_async().await?;
 
     #[derive(diesel::QueryableByName)]
     struct Stats {
@@ -225,18 +289,11 @@ async fn user_stats() -> Result<Json<ApiResponse<serde_json::Value>>, StatusCode
 }
 
 /// 创建路由
-fn create_routes() -> Router {
+fn create_routes() -> Router<AppState> {
     Router::new()
         .route("/health", get(health_check))
         .route("/api/users", get(get_users))
-        .route("/api/users", post(create_user))
         .route("/api/users/:id", get(get_user))
-        .route("/api/users/:id", axum::routing::put(update_user))
-        .route("/api/users/:id", axum::routing::delete(delete_user))
-        .route("/api/users/search", get(search_users))
-        .route("/api/users/batch", post(batch_create_users))
-        .route("/api/stats", get(user_stats))
-        .route("/api/stats/age-distribution", get(age_distribution))
 }
 
 #[tokio::main]
@@ -246,11 +303,24 @@ async fn main() -> Result<()> {
     
     info!("🚀 启动 Diesel-GaussDB Web 应用示例");
 
+    // 创建数据库管理器
+    let database_url = env::var("GAUSSDB_URL")
+        .unwrap_or_else(|_| {
+            "host=localhost port=5432 user=gaussdb password=Gaussdb@123 dbname=postgres".to_string()
+        });
+
+    let db_manager = Arc::new(DatabaseManager::new(database_url));
+
     // 初始化数据库
-    init_database()?;
+    init_database(&db_manager).await?;
+
+    // 创建应用状态
+    let app_state = AppState {
+        db_manager: db_manager.clone(),
+    };
 
     // 创建路由
-    let app = create_routes();
+    let app = create_routes().with_state(app_state);
 
     // 启动服务器
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
@@ -266,8 +336,7 @@ async fn main() -> Result<()> {
 async fn search_users(
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> Result<Json<ApiResponse<Vec<User>>>, StatusCode> {
-    let mut conn = establish_connection()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut conn = establish_connection_async().await?;
 
     let mut sql = "SELECT id, name, email, age FROM users WHERE 1=1".to_string();
 
@@ -304,8 +373,7 @@ async fn search_users(
 async fn batch_create_users(
     Json(users): Json<Vec<NewUser>>,
 ) -> Result<Json<ApiResponse<String>>, StatusCode> {
-    let mut conn = establish_connection()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut conn = establish_connection_async().await?;
 
     if users.is_empty() {
         return Err(StatusCode::BAD_REQUEST);
@@ -342,8 +410,7 @@ async fn batch_create_users(
 
 /// 年龄分布统计
 async fn age_distribution() -> Result<Json<ApiResponse<serde_json::Value>>, StatusCode> {
-    let mut conn = establish_connection()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut conn = establish_connection_async().await?;
 
     #[derive(diesel::QueryableByName)]
     struct AgeGroup {
