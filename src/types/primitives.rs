@@ -9,6 +9,7 @@ use diesel::deserialize::{self, FromSql};
 use diesel::serialize::{self, IsNull, Output, ToSql};
 use diesel::sql_types::*;
 use byteorder::{NetworkEndian, ReadBytesExt, WriteBytesExt};
+use std::io::Write;
 
 // Helper function for size errors (following PostgreSQL pattern)
 #[cold]
@@ -192,6 +193,14 @@ impl FromSql<Bool, GaussDB> for bool {
     fn from_sql(value: GaussDBValue<'_>) -> deserialize::Result<Self> {
         let bytes = value.as_bytes().ok_or("Bool value is null")?;
         Ok(bytes[0] != 0)
+    }
+}
+
+impl ToSql<Bool, GaussDB> for bool {
+    fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, GaussDB>) -> serialize::Result {
+        out.write_all(&[if *self { 1 } else { 0 }])
+            .map(|_| IsNull::No)
+            .map_err(Into::into)
     }
 }
 

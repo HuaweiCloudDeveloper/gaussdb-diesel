@@ -410,6 +410,8 @@ dependencies = [
 [[package]]
 name = "gaussdb"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "230c689e1926edc7d0617c0b1f33bf5d9a0c588676ffb2ed386e4cd55966cae9"
 dependencies = [
  "bytes",
  "fallible-iterator",
@@ -422,6 +424,8 @@ dependencies = [
 [[package]]
 name = "gaussdb-protocol"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1508dd7a136ea126f2418af8d1db2ba87b2341a4acfd8f7e7ebad04ed96f4e96"
 dependencies = [
  "base64",
  "byteorder",
@@ -441,6 +445,8 @@ dependencies = [
 [[package]]
 name = "gaussdb-types"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f5cdc4bb67ba30e52534ea8afc5440d7667211a420b86d02a2b4badcbe67731f"
 dependencies = [
  "bytes",
  "fallible-iterator",
@@ -1187,6 +1193,8 @@ dependencies = [
 [[package]]
 name = "tokio-gaussdb"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "139085f622d4c709965315e008e7644589dac513edd626d4a1260b081d957c01"
 dependencies = [
  "async-trait",
  "byteorder",

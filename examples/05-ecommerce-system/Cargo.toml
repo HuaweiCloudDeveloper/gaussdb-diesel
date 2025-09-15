@@ -1,0 +1,21 @@
+[package]
+name = "diesel-gaussdb-ecommerce"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "ecommerce_system"
+path = "src/main.rs"
+
+[dependencies]
+diesel-gaussdb = { path = "../../", features = ["chrono", "uuid", "serde_json", "bigdecimal"] }
+diesel = { version = "=2.2.12", features = ["postgres", "chrono", "serde_json", "numeric", "uuid"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+log = "0.4"
+env_logger = "0.10"
+tokio = { version = "1.0", features = ["full"] }
+bigdecimal = { version = "0.4", features = ["serde"] }

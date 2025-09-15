@@ -144,9 +144,14 @@ fn main() -> Result<()> {
 fn demo_basic_crud(conn: &mut GaussDBConnection) -> Result<()> {
     info!("\n📋 === 基础 CRUD 操作演示 ===");
 
-    // 清理现有数据
+    // 清理现有数据（注意外键约束顺序：post_tags -> comments -> posts -> users, tags）
     info!("清理现有数据...");
-    diesel::sql_query("DELETE FROM users").execute(conn)?;
+    // 按照外键依赖关系的逆序删除
+    diesel::sql_query("DELETE FROM post_tags").execute(conn)?;  // 关联表先删除
+    diesel::sql_query("DELETE FROM comments").execute(conn)?;   // 评论表
+    diesel::sql_query("DELETE FROM posts").execute(conn)?;      // 文章表
+    diesel::sql_query("DELETE FROM users").execute(conn)?;      // 用户表
+    diesel::sql_query("DELETE FROM tags").execute(conn)?;       // 标签表（独立表）
     info!("✅ 数据清理完成");
 
     // 1. 创建用户 (Create)

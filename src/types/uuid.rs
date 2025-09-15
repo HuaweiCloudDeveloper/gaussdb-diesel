@@ -17,13 +17,7 @@ use diesel::serialize::{self, IsNull, Output, ToSql};
 #[cfg(feature = "uuid")]
 use diesel::sql_types::Uuid;
 
-/// AsExpression and FromSqlRow proxy for UUID
-#[cfg(feature = "uuid")]
-#[derive(AsExpression, FromSqlRow)]
-#[diesel(foreign_derive)]
-#[diesel(sql_type = Uuid)]
-#[allow(dead_code)]
-struct UuidProxy(uuid::Uuid);
+
 
 /// FromSql implementation for UUID
 #[cfg(feature = "uuid")]

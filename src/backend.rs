@@ -176,6 +176,24 @@ impl HasSqlType<diesel::sql_types::BigInt> for GaussDB {
     }
 }
 
+impl HasSqlType<diesel::sql_types::Numeric> for GaussDB {
+    fn metadata(_: &mut (dyn GaussDBMetadataLookup + 'static)) -> GaussDBTypeMetadata {
+        GaussDBTypeMetadata::new(1700, 1231) // numeric, _numeric
+    }
+}
+
+impl HasSqlType<diesel::sql_types::Json> for GaussDB {
+    fn metadata(_: &mut (dyn GaussDBMetadataLookup + 'static)) -> GaussDBTypeMetadata {
+        GaussDBTypeMetadata::new(114, 199) // json, _json
+    }
+}
+
+impl HasSqlType<diesel::sql_types::Jsonb> for GaussDB {
+    fn metadata(_: &mut (dyn GaussDBMetadataLookup + 'static)) -> GaussDBTypeMetadata {
+        GaussDBTypeMetadata::new(3802, 3807) // jsonb, _jsonb
+    }
+}
+
 impl HasSqlType<diesel::sql_types::Float> for GaussDB {
     fn metadata(_: &mut (dyn GaussDBMetadataLookup + 'static)) -> GaussDBTypeMetadata {
         GaussDBTypeMetadata::new(700, 1021) // float4, _float4

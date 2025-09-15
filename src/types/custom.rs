@@ -136,32 +136,7 @@ macro_rules! define_custom_enum {
     };
 }
 
-/// UUID type support
-#[cfg(feature = "uuid")]
-pub mod uuid_support {
-    use super::*;
-    use diesel::sql_types::Uuid as DieselUuid;
-    
-    impl FromSql<DieselUuid, GaussDB> for uuid::Uuid {
-        fn from_sql(value: GaussDBValue<'_>) -> deserialize::Result<Self> {
-            let bytes = value.as_bytes().ok_or("UUID value is null")?;
-            if bytes.len() != 16 {
-                return Err("Invalid UUID length".into());
-            }
-            
-            let mut uuid_bytes = [0u8; 16];
-            uuid_bytes.copy_from_slice(bytes);
-            Ok(uuid::Uuid::from_bytes(uuid_bytes))
-        }
-    }
-    
-    impl ToSql<DieselUuid, GaussDB> for uuid::Uuid {
-        fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, GaussDB>) -> serialize::Result {
-            out.write_all(self.as_bytes())?;
-            Ok(IsNull::No)
-        }
-    }
-}
+
 
 /// Network address type support
 pub mod network_support {

@@ -345,34 +345,40 @@ async fn initialize_database(db_manager: &DatabaseManager) -> Result<()> {
 
     info!("初始化数据库表...");
 
-    // 创建用户表
+    // 创建用户表（先删除可能存在的旧表）
     db_manager.execute_query(|conn| {
+        // 先删除可能存在的表（按外键依赖顺序）
+        diesel::sql_query("DROP TABLE IF EXISTS comments CASCADE").execute(conn)?;
+        diesel::sql_query("DROP TABLE IF EXISTS posts CASCADE").execute(conn)?;
+        diesel::sql_query("DROP TABLE IF EXISTS users CASCADE").execute(conn)?;
+
+        // 创建用户表
         diesel::sql_query(
-            "CREATE TABLE IF NOT EXISTS users (
+            "CREATE TABLE users (
                 id SERIAL PRIMARY KEY,
-                username VARCHAR UNIQUE NOT NULL,
-                email VARCHAR UNIQUE NOT NULL,
-                password_hash VARCHAR NOT NULL,
+                username VARCHAR(255) UNIQUE NOT NULL,
+                email VARCHAR(255) UNIQUE NOT NULL,
+                password_hash VARCHAR(255) NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )"
         ).execute(conn)
-    }).await.map_err(|_| anyhow::anyhow!("Failed to create users table"))?;
+    }).await.map_err(|e| anyhow::anyhow!("Failed to create users table: {}", e))?;
 
     // 创建文章表
     db_manager.execute_query(|conn| {
         diesel::sql_query(
-            "CREATE TABLE IF NOT EXISTS posts (
+            "CREATE TABLE posts (
                 id SERIAL PRIMARY KEY,
-                title VARCHAR NOT NULL,
+                title VARCHAR(255) NOT NULL,
                 content TEXT NOT NULL,
                 author_id INTEGER NOT NULL,
                 published BOOLEAN DEFAULT FALSE,
                 view_count INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (author_id) REFERENCES users(id)
+                FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE
             )"
         ).execute(conn)
-    }).await.map_err(|_| anyhow::anyhow!("Failed to create posts table"))?;
+    }).await.map_err(|e| anyhow::anyhow!("Failed to create posts table: {}", e))?;
 
     // 创建评论表
     db_manager.execute_query(|conn| {
