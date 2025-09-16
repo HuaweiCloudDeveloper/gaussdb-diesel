@@ -307,7 +307,7 @@ mod tests {
         let debug_str = format!("{:?}", window_fn);
         assert!(debug_str.contains("WindowFunction"));
         
-        println!("✅ 窗口函数创建测试通过");
+        // 窗口函数创建测试通过
     }
 
     #[test]
@@ -318,7 +318,7 @@ mod tests {
         let debug_str = format!("{:?}", over_clause);
         assert!(debug_str.contains("OverClause"));
         
-        println!("✅ OVER 子句创建测试通过");
+        // OVER 子句创建测试通过
     }
 
     #[test]
@@ -327,13 +327,13 @@ mod tests {
         let row_num = row_number();
         let rank_fn = rank();
         let dense_rank_fn = dense_rank();
-        
+
         // 验证函数可以正确创建
         assert!(format!("{:?}", row_num).contains("RowNumber"));
         assert!(format!("{:?}", rank_fn).contains("Rank"));
         assert!(format!("{:?}", dense_rank_fn).contains("DenseRank"));
-        
-        println!("✅ 窗口函数类型测试通过");
+
+        // 窗口函数类型测试通过
     }
 
     #[test]
@@ -351,17 +351,17 @@ mod tests {
         assert!(format!("{:?}", over_with_both).contains("partition_by"));
         assert!(format!("{:?}", over_with_both).contains("order_by"));
         
-        println!("✅ OVER 子句构建器测试通过");
+        // OVER 子句构建器测试通过
     }
 
     #[test]
     fn test_window_count() {
         // 测试 COUNT 窗口函数
         let count_fn = count("*");
-        
+
         let debug_str = format!("{:?}", count_fn);
         assert!(debug_str.contains("WindowCount"));
-        
-        println!("✅ COUNT 窗口函数测试通过");
+
+        // COUNT 窗口函数测试通过
     }
 }

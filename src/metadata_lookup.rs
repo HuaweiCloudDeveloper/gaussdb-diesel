@@ -396,6 +396,6 @@ mod tests {
         assert_eq!(column.ordinal_position, 1);
         assert!(column.column_default.is_some());
 
-        println!("✅ ColumnInfo 结构体测试通过");
+        // Test passed
     }
 }

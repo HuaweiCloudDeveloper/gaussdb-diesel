@@ -242,7 +242,7 @@ mod tests {
         // 布尔类型
         assert!(std::any::TypeId::of::<bool>() != std::any::TypeId::of::<i32>());
 
-        println!("✅ 类型系统完整性验证通过");
+        // 类型系统完整性验证通过
     }
 
     #[test]
@@ -262,6 +262,6 @@ mod tests {
             let _: fn(GaussDBValue<'_>) -> deserialize::Result<Vec<u8>> = FromSql::<Binary, GaussDB>::from_sql;
         }
 
-        println!("✅ 基础类型 trait 实现验证通过");
+        // 基础类型 trait 实现验证通过
     }
 }

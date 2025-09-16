@@ -238,12 +238,4 @@ mod gaussdb_verification_tests {
     }
 }
 
-#[cfg(not(feature = "gaussdb"))]
-mod no_gaussdb_feature {
-    #[test]
-    fn test_gaussdb_feature_required() {
-        println!("⚠️  gaussdb feature 未启用");
-        println!("💡 使用 --features gaussdb 来启用 GaussDB 支持");
-        println!("💡 示例: cargo test --features gaussdb gaussdb_connection_verification");
-    }
-}
+// Note: gaussdb feature is now always enabled for real implementation

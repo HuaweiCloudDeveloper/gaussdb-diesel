@@ -211,11 +211,11 @@ mod tests {
             Ok(pool) => {
                 // 验证连接池配置
                 assert_eq!(pool.max_size(), 10);
-                println!("✅ 生产级连接池创建成功");
+                // Test passed
             }
             Err(_) => {
                 // 在没有真实数据库的情况下，这是预期的
-                println!("⚠️  生产级连接池创建失败（预期，因为没有真实数据库）");
+                // Debug output removed
             }
         }
     }
@@ -232,11 +232,11 @@ mod tests {
             Ok(pool) => {
                 // 验证连接池配置
                 assert_eq!(pool.max_size(), 5);
-                println!("✅ 开发环境连接池创建成功");
+                // Test passed
             }
             Err(_) => {
                 // 在没有真实数据库的情况下，这是预期的
-                println!("⚠️  开发环境连接池创建失败（预期，因为没有真实数据库）");
+                // Debug output removed
             }
         }
     }
@@ -253,9 +253,9 @@ mod tests {
         // 即使连接失败，我们也可以验证配置的差异
         if let (Ok(prod_pool), Ok(dev_pool)) = (prod_result, dev_result) {
             assert!(prod_pool.max_size() > dev_pool.max_size());
-            println!("✅ 连接池配置差异验证通过");
+            // Test passed
         } else {
-            println!("⚠️  连接池配置测试跳过（无真实数据库连接）");
+            // Debug output removed
         }
     }
 }

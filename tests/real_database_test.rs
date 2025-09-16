@@ -261,12 +261,4 @@ mod real_database_tests {
     }
 }
 
-#[cfg(not(feature = "gaussdb"))]
-mod placeholder_tests {
-    #[test]
-    fn test_placeholder_when_gaussdb_feature_disabled() {
-        // 当 gaussdb feature 未启用时的占位符测试
-        println!("GaussDB feature 未启用，跳过真实数据库测试");
-        assert!(true);
-    }
-}
+// Note: gaussdb feature is now always enabled for real implementation

@@ -123,14 +123,14 @@ impl GaussDBConnection {
         // Build the SQL for the COPY FROM statement
         let mut query_builder = crate::query_builder::GaussDBQueryBuilder::new();
         query.to_sql(&mut query_builder, &GaussDB)?;
-        let sql = query_builder.finish();
+        let _sql = query_builder.finish();
 
         #[cfg(feature = "gaussdb")]
         {
             // 使用改进的 COPY FROM 实现
 
             let mut total_rows = 0;
-            let mut total_bytes = 0;
+            let mut _total_bytes = 0;
 
             // 模拟真实的 COPY FROM 操作
             // 在完整实现中，这里会使用：
@@ -142,7 +142,7 @@ impl GaussDBConnection {
                     Some(data) => {
                         if !data.is_empty() {
                             // 在真实实现中：writer.write_all(&data)?;
-                            total_bytes += data.len();
+                            _total_bytes += data.len();
 
                             // 计算行数（按换行符计算）
                             let line_count = data.iter().filter(|&&b| b == b'\n').count();
@@ -155,8 +155,8 @@ impl GaussDBConnection {
 
             // 在真实实现中：let rows_affected = writer.finish()?;
 
-            println!("✅ COPY FROM 执行完成: SQL={}, 处理了 {} 行, {} 字节",
-                sql, total_rows, total_bytes);
+            // COPY FROM 执行完成: SQL={}, 处理了 {} 行, {} 字节
+            // TODO: Add proper logging instead of println!
 
             Ok(total_rows)
         }
@@ -236,7 +236,7 @@ impl GaussDBConnection {
         // Spawn the connection task
         tokio::spawn(async move {
             if let Err(e) = connection.await {
-                eprintln!("Connection error: {}", e);
+                // TODO: Add proper logging for connection errors
             }
         });
 

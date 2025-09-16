@@ -14,7 +14,7 @@ use byteorder::{NetworkEndian, ReadBytesExt, WriteBytesExt};
 
 #[cfg(feature = "bigdecimal")]
 use bigdecimal::BigDecimal;
-use std::io::Write;
+// Note: std::io::Write import removed as it's unused in current implementation
 
 /// Represents a NUMERIC value, closely mirroring the PostgreSQL wire protocol
 /// representation for GaussDB compatibility.

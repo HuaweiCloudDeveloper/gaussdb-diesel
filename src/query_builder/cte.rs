@@ -270,7 +270,7 @@ mod tests {
         assert!(!cte_def.recursive);
         assert!(cte_def.column_names.is_none());
         
-        println!("✅ CTE 定义创建测试通过");
+        // Test passed
     }
 
     #[test]
@@ -281,7 +281,7 @@ mod tests {
         
         assert!(cte_def.recursive);
         
-        println!("✅ 递归 CTE 测试通过");
+        // Test passed
     }
 
     #[test]
@@ -293,7 +293,7 @@ mod tests {
         assert!(cte_def.column_names.is_some());
         assert_eq!(cte_def.column_names.unwrap().len(), 2);
         
-        println!("✅ 带列名的 CTE 测试通过");
+        // Test passed
     }
 
     #[test]
@@ -304,7 +304,7 @@ mod tests {
         
         assert!(!with_clause.has_recursive);
         
-        println!("✅ WITH 子句创建测试通过");
+        // Test passed
     }
 
     #[test]
@@ -315,7 +315,7 @@ mod tests {
         
         assert!(with_clause.has_recursive);
         
-        println!("✅ 递归 WITH 子句测试通过");
+        // Test passed
     }
 
     #[test]
@@ -328,7 +328,7 @@ mod tests {
         assert!(recursive_cte_def.recursive); // 递归 CTE 应该为 true
         assert!(!with_clause.has_recursive); // WITH 子句默认不是递归的
 
-        println!("✅ 便捷函数测试通过");
+        // Test passed
     }
 
     #[test]
@@ -339,6 +339,6 @@ mod tests {
         
         assert!(debug_str.contains("CteDefinition"));
         
-        println!("✅ CTE Debug 实现测试通过");
+        // Test passed
     }
 }

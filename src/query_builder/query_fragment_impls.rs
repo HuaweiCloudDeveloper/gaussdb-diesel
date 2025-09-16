@@ -31,7 +31,7 @@ where
 
 // 2. ILike操作符支持
 // 导入我们自己实现的ILike操作符
-use crate::expression::expression_methods::ILike;
+// Note: ILike import removed as it's unused in current implementation
 
 // ILike操作符已经在expression_methods.rs中实现了QueryFragment<GaussDB>
 // 这里不需要额外的实现

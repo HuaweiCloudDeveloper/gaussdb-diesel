@@ -166,7 +166,7 @@ mod tests {
         let clause = DistinctOnClause::new("user_id");
         assert_eq!(clause.expr, "user_id");
 
-        println!("✅ DISTINCT ON 结构体测试通过");
+        // DISTINCT ON 结构体测试通过
     }
 
     #[test]
@@ -178,7 +178,7 @@ mod tests {
         let debug_str = format!("{:?}", clause);
         assert!(debug_str.contains("MultiDistinctOnClause"));
 
-        println!("✅ 多表达式 DISTINCT ON 结构体测试通过");
+        // 多表达式 DISTINCT ON 结构体测试通过
     }
 
     #[test]
@@ -189,7 +189,7 @@ mod tests {
 
         assert_eq!(clause1.expr, clause2.expr);
 
-        println!("✅ DISTINCT ON Clone 实现测试通过");
+        // DISTINCT ON Clone 实现测试通过
     }
 
     #[test]
@@ -203,7 +203,7 @@ mod tests {
         let debug2 = format!("{:?}", clause2);
         assert_eq!(debug1, debug2);
 
-        println!("✅ 多表达式 DISTINCT ON Clone 实现测试通过");
+        // 多表达式 DISTINCT ON Clone 实现测试通过
     }
 
     #[test]
@@ -213,6 +213,6 @@ mod tests {
         let debug_str = format!("{:?}", clause);
         assert!(debug_str.contains("MultiDistinctOnClause"));
 
-        println!("✅ 多表达式 DISTINCT ON Debug 实现测试通过");
+        // 多表达式 DISTINCT ON Debug 实现测试通过
     }
 }

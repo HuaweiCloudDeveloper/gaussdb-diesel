@@ -35,6 +35,8 @@
 pub mod backend;
 pub mod connection;
 pub mod metadata_lookup;
+pub mod monitoring;
+pub mod performance;
 pub mod pool;
 pub mod query_builder;
 pub mod types;

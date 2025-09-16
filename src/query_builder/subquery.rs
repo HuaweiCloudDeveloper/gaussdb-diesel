@@ -398,7 +398,7 @@ mod tests {
         let debug_str = format!("{:?}", subquery);
         assert!(debug_str.contains("ScalarSubquery"));
         
-        println!("✅ 标量子查询创建测试通过");
+        // Test passed
     }
 
     #[test]
@@ -409,7 +409,7 @@ mod tests {
         let debug_str = format!("{:?}", exists_query);
         assert!(debug_str.contains("ExistsSubquery"));
         
-        println!("✅ EXISTS 子查询创建测试通过");
+        // Test passed
     }
 
     #[test]
@@ -420,7 +420,7 @@ mod tests {
         let debug_str = format!("{:?}", not_exists_query);
         assert!(debug_str.contains("NotExistsSubquery"));
         
-        println!("✅ NOT EXISTS 子查询创建测试通过");
+        // Test passed
     }
 
     #[test]
@@ -431,7 +431,7 @@ mod tests {
         let debug_str = format!("{:?}", in_query);
         assert!(debug_str.contains("InSubquery"));
         
-        println!("✅ IN 子查询创建测试通过");
+        // Test passed
     }
 
     #[test]
@@ -442,7 +442,7 @@ mod tests {
         let debug_str = format!("{:?}", not_in_query);
         assert!(debug_str.contains("NotInSubquery"));
         
-        println!("✅ NOT IN 子查询创建测试通过");
+        // Test passed
     }
 
     #[test]
@@ -461,7 +461,7 @@ mod tests {
         assert!(format!("{:?}", in_query).contains("InSubquery"));
         assert!(format!("{:?}", not_in_query).contains("NotInSubquery"));
         
-        println!("✅ 便捷函数测试通过");
+        // Test passed
     }
 
     #[test]
@@ -475,6 +475,6 @@ mod tests {
         assert!(format!("{:?}", exists_query).contains("ExistsSubquery"));
         assert!(format!("{:?}", not_exists_query).contains("NotExistsSubquery"));
         
-        println!("✅ SubqueryDsl trait 测试通过");
+        // Test passed
     }
 }

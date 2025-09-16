@@ -359,7 +359,7 @@ mod tests {
             Ok(conn) => conn,
             Err(_) => {
                 // 如果无法连接，跳过测试
-                println!("跳过 COPY FROM 执行测试 - 无法建立数据库连接");
+                // Debug output removed
                 return;
             }
         };
@@ -403,7 +403,7 @@ mod tests {
         let mut connection = match GaussDBConnection::establish(database_url) {
             Ok(conn) => conn,
             Err(_) => {
-                println!("跳过 COPY FROM 错误处理测试 - 无法建立数据库连接");
+                // Debug output removed
                 return;
             }
         };
@@ -422,6 +422,6 @@ mod tests {
         // 执行应该返回错误
         let result = connection.execute_copy_from(&query, callback);
         assert!(result.is_err());
-        println!("✅ COPY FROM 错误处理测试通过");
+        // Test passed
     }
 }
