@@ -10,20 +10,8 @@
 /// Array operations and expressions
 pub mod array_ops;
 
-/// Placeholder for array comparison expressions
-pub mod array_comparison {
-    //! Array comparison operations for GaussDB (placeholder)
-
-    /// Placeholder ANY function
-    pub fn any_placeholder() {
-        // This is a placeholder for ANY functionality
-    }
-
-    /// Placeholder ALL function
-    pub fn all_placeholder() {
-        // This is a placeholder for ALL functionality
-    }
-}
+/// Array comparison expressions for GaussDB
+pub mod array_comparison;
 
 /// GaussDB specific expression methods
 pub mod expression_methods;
@@ -81,6 +69,9 @@ pub mod dsl {
     pub use super::expression_methods::{
         GaussDBStringExpressionMethods,
     };
+    pub use super::array_comparison::{
+        any, all, Any, All, AsArrayExpression,
+    };
 
     /// Placeholder for DSL functions
     pub fn dsl_placeholder() {
@@ -96,8 +87,12 @@ mod tests {
     fn test_expression_module_structure() {
         // Test that the module structure is properly set up
         // This is a compile-time test to ensure all modules are accessible
-        array_comparison::any_placeholder();
-        array_comparison::all_placeholder();
+
+        // Test array comparison functions exist
+        use diesel::sql_types::{Array, Integer};
+        let _any_expr = array_comparison::any(diesel::dsl::sql::<Array<Integer>>("ARRAY[1,2,3]"));
+        let _all_expr = array_comparison::all(diesel::dsl::sql::<Array<Integer>>("ARRAY[1,2,3]"));
+
         functions::functions_placeholder();
         operators::operators_placeholder();
         dsl::dsl_placeholder();

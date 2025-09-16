@@ -235,8 +235,10 @@ mod tests {
         use crate::expression::*;
 
         // Test that expression modules are accessible
-        array_comparison::any_placeholder();
-        array_comparison::all_placeholder();
+        use diesel::sql_types::{Array, Integer};
+        let _any_expr = array_comparison::any(diesel::dsl::sql::<Array<Integer>>("ARRAY[1,2,3]"));
+        let _all_expr = array_comparison::all(diesel::dsl::sql::<Array<Integer>>("ARRAY[1,2,3]"));
+
         functions::functions_placeholder();
         operators::operators_placeholder();
         dsl::dsl_placeholder();
