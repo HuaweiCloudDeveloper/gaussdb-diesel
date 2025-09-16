@@ -43,6 +43,7 @@ mod tests {
     use diesel::query_builder::{QueryBuilder, QueryFragment};
 
     /// 测试辅助函数：生成QueryFragment的SQL
+    #[allow(dead_code)]
     fn generate_sql<T>(fragment: T) -> String
     where
         T: QueryFragment<GaussDB>
