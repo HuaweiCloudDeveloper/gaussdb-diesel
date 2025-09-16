@@ -145,83 +145,14 @@ where
     }
 }
 
-/// Expression for the `ILIKE` operator
-#[derive(Debug, Clone, Copy)]
-pub struct ILike<L, R> {
-    left: L,
-    right: R,
-}
+// 使用diesel的infix_operator宏来定义ILike操作符
+// 这会自动实现所有必要的trait，包括NonAggregate, AppearsOnTable, QueryId等
+use diesel::infix_operator;
 
-impl<L, R> ILike<L, R> {
-    /// 创建新的不区分大小写的 LIKE 操作表达式
-    ///
-    /// # 参数
-    /// * `left` - 左操作数（要匹配的字符串表达式）
-    /// * `right` - 右操作数（匹配模式）
-    pub fn new(left: L, right: R) -> Self {
-        ILike { left, right }
-    }
-}
+infix_operator!(ILike, " ILIKE ", backend: GaussDB);
+infix_operator!(NotILike, " NOT ILIKE ", backend: GaussDB);
 
-impl<L, R> Expression for ILike<L, R>
-where
-    L: Expression<SqlType = Text>,
-    R: Expression<SqlType = Text>,
-{
-    type SqlType = Bool;
-}
-
-impl<L, R> QueryFragment<GaussDB> for ILike<L, R>
-where
-    L: QueryFragment<GaussDB>,
-    R: QueryFragment<GaussDB>,
-{
-    fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, GaussDB>) -> QueryResult<()> {
-        self.left.walk_ast(out.reborrow())?;
-        out.push_sql(" ILIKE ");
-        self.right.walk_ast(out.reborrow())?;
-        Ok(())
-    }
-}
-
-/// Expression for the `NOT ILIKE` operator
-#[derive(Debug, Clone, Copy)]
-pub struct NotILike<L, R> {
-    left: L,
-    right: R,
-}
-
-impl<L, R> NotILike<L, R> {
-    /// 创建新的不区分大小写的 NOT LIKE 操作表达式
-    ///
-    /// # 参数
-    /// * `left` - 左操作数（要匹配的字符串表达式）
-    /// * `right` - 右操作数（匹配模式）
-    pub fn new(left: L, right: R) -> Self {
-        NotILike { left, right }
-    }
-}
-
-impl<L, R> Expression for NotILike<L, R>
-where
-    L: Expression<SqlType = Text>,
-    R: Expression<SqlType = Text>,
-{
-    type SqlType = Bool;
-}
-
-impl<L, R> QueryFragment<GaussDB> for NotILike<L, R>
-where
-    L: QueryFragment<GaussDB>,
-    R: QueryFragment<GaussDB>,
-{
-    fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, GaussDB>) -> QueryResult<()> {
-        self.left.walk_ast(out.reborrow())?;
-        out.push_sql(" NOT ILIKE ");
-        self.right.walk_ast(out.reborrow())?;
-        Ok(())
-    }
-}
+// NotILike 已经通过 infix_operator! 宏定义了
 
 /// Expression for the `~` (regex match) operator
 #[derive(Debug, Clone, Copy)]

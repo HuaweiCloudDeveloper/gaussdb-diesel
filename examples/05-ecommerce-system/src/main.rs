@@ -5,6 +5,7 @@ mod services;
 
 use anyhow::Result;
 use chrono::Utc;
+use diesel::{RunQueryDsl, Connection};
 use log::info;
 use std::env;
 use tokio::sync::oneshot;

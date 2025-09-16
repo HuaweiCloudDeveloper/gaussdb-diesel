@@ -128,7 +128,8 @@ diesel::table! {
     }
 }
 
-diesel::joinable!(categories -> categories (parent_id));
+// 注释掉自引用表的joinable，因为会导致冲突
+// diesel::joinable!(categories -> categories (parent_id));
 diesel::joinable!(order_items -> orders (order_id));
 diesel::joinable!(order_items -> products (product_id));
 diesel::joinable!(orders -> customers (customer_id));

@@ -272,3 +272,111 @@ mod tests {
         assert_eq!(default_interval.microseconds, 0);
     }
 }
+
+// Chrono support
+#[cfg(feature = "chrono")]
+mod chrono_support {
+    use super::*;
+    use chrono::{NaiveDate, NaiveTime, NaiveDateTime, DateTime, Utc, TimeZone, Timelike, Datelike};
+
+    // PostgreSQL epoch: January 1, 2000 00:00:00 UTC
+    const PG_EPOCH: i64 = 946684800; // Unix timestamp for 2000-01-01 00:00:00 UTC
+
+    impl ToSql<Timestamp, GaussDB> for NaiveDateTime {
+        fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, GaussDB>) -> serialize::Result {
+            // Convert NaiveDateTime to microseconds since PostgreSQL epoch
+            let unix_timestamp = self.and_utc().timestamp();
+            let microseconds = (unix_timestamp - PG_EPOCH) * 1_000_000 + self.and_utc().timestamp_subsec_micros() as i64;
+
+            out.write_i64::<NetworkEndian>(microseconds)?;
+            Ok(IsNull::No)
+        }
+    }
+
+    impl FromSql<Timestamp, GaussDB> for NaiveDateTime {
+        fn from_sql(value: GaussDBValue<'_>) -> deserialize::Result<Self> {
+            let bytes = value.as_bytes().ok_or("Timestamp value is null")?;
+            let mut cursor = std::io::Cursor::new(bytes);
+            let microseconds = cursor.read_i64::<NetworkEndian>()?;
+
+            // Convert microseconds since PostgreSQL epoch to NaiveDateTime
+            let seconds = microseconds / 1_000_000 + PG_EPOCH;
+            let nanoseconds = (microseconds % 1_000_000) * 1_000;
+
+            DateTime::from_timestamp(seconds, nanoseconds as u32)
+                .map(|dt| dt.naive_utc())
+                .ok_or_else(|| "Invalid timestamp value".into())
+        }
+    }
+
+    impl ToSql<Timestamptz, GaussDB> for DateTime<Utc> {
+        fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, GaussDB>) -> serialize::Result {
+            // Convert DateTime<Utc> to microseconds since PostgreSQL epoch
+            let unix_timestamp = self.timestamp();
+            let microseconds = (unix_timestamp - PG_EPOCH) * 1_000_000 + self.timestamp_subsec_micros() as i64;
+
+            out.write_i64::<NetworkEndian>(microseconds)?;
+            Ok(IsNull::No)
+        }
+    }
+
+    impl FromSql<Timestamptz, GaussDB> for DateTime<Utc> {
+        fn from_sql(value: GaussDBValue<'_>) -> deserialize::Result<Self> {
+            let naive = <NaiveDateTime as FromSql<Timestamp, GaussDB>>::from_sql(value)?;
+            Ok(Utc.from_utc_datetime(&naive))
+        }
+    }
+
+    impl ToSql<Date, GaussDB> for NaiveDate {
+        fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, GaussDB>) -> serialize::Result {
+            // Convert NaiveDate to days since PostgreSQL epoch (2000-01-01)
+            let pg_epoch_date = NaiveDate::from_ymd_opt(2000, 1, 1)
+                .ok_or_else(|| Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid PostgreSQL epoch date")))?;
+            let days = self.signed_duration_since(pg_epoch_date).num_days() as i32;
+
+            out.write_i32::<NetworkEndian>(days)?;
+            Ok(IsNull::No)
+        }
+    }
+
+    impl FromSql<Date, GaussDB> for NaiveDate {
+        fn from_sql(value: GaussDBValue<'_>) -> deserialize::Result<Self> {
+            let bytes = value.as_bytes().ok_or("Date value is null")?;
+            let mut cursor = std::io::Cursor::new(bytes);
+            let days = cursor.read_i32::<NetworkEndian>()?;
+
+            // Convert days since PostgreSQL epoch to NaiveDate
+            let pg_epoch_date = NaiveDate::from_ymd_opt(2000, 1, 1)
+                .ok_or_else(|| "Invalid PostgreSQL epoch date")?;
+
+            pg_epoch_date.checked_add_signed(chrono::Duration::days(days as i64))
+                .ok_or_else(|| "Invalid date value".into())
+        }
+    }
+
+    impl ToSql<Time, GaussDB> for NaiveTime {
+        fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, GaussDB>) -> serialize::Result {
+            // Convert NaiveTime to microseconds since midnight
+            let microseconds = self.num_seconds_from_midnight() as i64 * 1_000_000
+                + self.nanosecond() as i64 / 1_000;
+
+            out.write_i64::<NetworkEndian>(microseconds)?;
+            Ok(IsNull::No)
+        }
+    }
+
+    impl FromSql<Time, GaussDB> for NaiveTime {
+        fn from_sql(value: GaussDBValue<'_>) -> deserialize::Result<Self> {
+            let bytes = value.as_bytes().ok_or("Time value is null")?;
+            let mut cursor = std::io::Cursor::new(bytes);
+            let microseconds = cursor.read_i64::<NetworkEndian>()?;
+
+            // Convert microseconds since midnight to NaiveTime
+            let seconds = (microseconds / 1_000_000) as u32;
+            let nanoseconds = ((microseconds % 1_000_000) * 1_000) as u32;
+
+            NaiveTime::from_num_seconds_from_midnight_opt(seconds, nanoseconds)
+                .ok_or_else(|| "Invalid time value".into())
+        }
+    }
+}

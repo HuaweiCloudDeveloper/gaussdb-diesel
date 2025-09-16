@@ -4,6 +4,7 @@ use chrono::{NaiveDate, NaiveDateTime, Utc};
 use diesel::prelude::*;
 use diesel::sql_query;
 use diesel::RunQueryDsl;
+use diesel_gaussdb::expression::expression_methods::GaussDBStringExpressionMethods;
 use log::info;
 use serde_json::json;
 use std::str::FromStr;
@@ -52,6 +53,7 @@ pub async fn demo_basic_operations(db_manager: &DatabaseManager) -> Result<()> {
     
     // 更新产品价格
     let updated_price = BigDecimal::from_str("1099.99")?;
+    let price_for_log = updated_price.clone(); // 克隆一份用于日志
     db_manager.execute_query(move |conn| {
         diesel::update(products::table.filter(products::id.eq(product_id)))
             .set((
@@ -60,8 +62,8 @@ pub async fn demo_basic_operations(db_manager: &DatabaseManager) -> Result<()> {
             ))
             .execute(conn)
     }).await?;
-    
-    info!("🔄 更新产品价格为: {}", updated_price);
+
+    info!("🔄 更新产品价格为: {}", price_for_log);
     
     // 将产品添加到分类
     db_manager.execute_query(move |conn| {
@@ -334,7 +336,7 @@ pub async fn demo_search_and_filtering(db_manager: &DatabaseManager) -> Result<(
     // 产品名称模糊搜索
     let search_results = db_manager.execute_query(|conn| {
         products::table
-            .filter(products::name.ilike("%phone%"))
+            .filter(GaussDBStringExpressionMethods::ilike(products::name, "%phone%"))
             .filter(products::is_active.eq(true))
             .select(Product::as_select())
             .load(conn)

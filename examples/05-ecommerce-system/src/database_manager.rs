@@ -1,4 +1,5 @@
 use anyhow::Result;
+use diesel::Connection;
 use tokio::sync::oneshot;
 use diesel_gaussdb::GaussDBConnection;
 

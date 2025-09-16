@@ -109,21 +109,23 @@ mod expression_methods_tests {
     #[test]
     fn test_expression_operators_structure() {
         // Test that the expression operator structures are properly defined
-        
-        use diesel_gaussdb::expression::expression_methods::{ILike, NotILike, RegexMatch, RegexMatchInsensitive};
-        
+
+        use diesel_gaussdb::expression::expression_methods::{RegexMatch, RegexMatchInsensitive};
+
         // Test that the operator structs exist and can be created
-        let ilike = ILike::new((), ());
-        let not_ilike = NotILike::new((), ());
+        // Note: ILike and NotILike are now created by infix_operator! macro and cannot be directly instantiated
         let regex_match = RegexMatch::new((), ());
         let regex_match_insensitive = RegexMatchInsensitive::new((), ());
-        
+
         // Test that debug formatting works
-        let _debug_ilike = format!("{:?}", ilike);
-        let _debug_not_ilike = format!("{:?}", not_ilike);
         let _debug_regex = format!("{:?}", regex_match);
         let _debug_regex_insensitive = format!("{:?}", regex_match_insensitive);
-        
+
+        // Test that ILike and NotILike types exist (compilation test)
+        use diesel_gaussdb::expression::expression_methods::{ILike, NotILike};
+        let _ilike_type: Option<ILike<(), ()>> = None;
+        let _not_ilike_type: Option<NotILike<(), ()>> = None;
+
         assert!(true);
     }
 
