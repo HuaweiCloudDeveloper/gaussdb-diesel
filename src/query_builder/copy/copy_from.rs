@@ -260,18 +260,7 @@ where
 
             Ok(rows_processed)
         }
-        #[cfg(not(feature = "gaussdb"))]
-        {
-            // 模拟实现
-            let mut rows_processed = 0;
-            loop {
-                match callback()? {
-                    Some(_) => rows_processed += 1,
-                    None => break,
-                }
-            }
-            Ok(rows_processed)
-        }
+
     }
 }
 

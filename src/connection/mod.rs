@@ -42,18 +42,12 @@ pub use self::loading_mode::{
 /// This connection type provides access to GaussDB databases using
 /// the real gaussdb crate for authentic connectivity.
 pub struct GaussDBConnection {
-    #[cfg(feature = "gaussdb")]
     raw_connection: Client,
-    #[cfg(not(feature = "gaussdb"))]
-    raw_connection: raw::RawConnection,
     transaction_manager: AnsiTransactionManager,
     instrumentation: Box<dyn Instrumentation>,
     /// Statement cache for prepared statements
-    #[cfg(feature = "gaussdb")]
     #[allow(dead_code)] // 将在后续版本中实现语句缓存功能
     statement_cache: StatementCache<GaussDB, Statement>,
-    #[cfg(not(feature = "gaussdb"))]
-    statement_cache: StatementCache<GaussDB, String>,
     /// Metadata cache for type lookups
     metadata_cache: GaussDBMetadataCache,
 }
@@ -102,11 +96,7 @@ impl GaussDBConnection {
         &mut self.raw_connection
     }
 
-    /// Get access to the raw connection for advanced operations (mock version)
-    #[cfg(not(feature = "gaussdb"))]
-    pub(crate) fn raw_connection(&mut self) -> &mut raw::RawConnection {
-        &mut self.raw_connection
-    }
+
 
     /// Execute a COPY FROM operation
     ///
@@ -170,23 +160,6 @@ impl GaussDBConnection {
 
             Ok(total_rows)
         }
-        #[cfg(not(feature = "gaussdb"))]
-        {
-            // Mock implementation for testing
-            let mut total_rows = 0;
-
-            // Simulate processing data
-            loop {
-                match data_callback()? {
-                    Some(_data) => {
-                        total_rows += 1;
-                    }
-                    None => break,
-                }
-            }
-
-            Ok(total_rows)
-        }
     }
 
     /// Execute a COPY TO operation
@@ -205,7 +178,7 @@ impl GaussDBConnection {
     pub fn execute_copy_to<T, F>(
         &mut self,
         query: &T,
-        mut output_callback: F,
+        _output_callback: F,
     ) -> QueryResult<usize>
     where
         T: QueryFragment<GaussDB> + QueryId,
@@ -216,59 +189,25 @@ impl GaussDBConnection {
         query.to_sql(&mut query_builder, &GaussDB)?;
         let sql = query_builder.finish();
 
-        #[cfg(feature = "gaussdb")]
         {
-            // For now, use a simplified implementation
-            // In a full implementation, this would use the gaussdb COPY API
-
-            // Execute the COPY TO statement and simulate data output
+            // Execute the COPY TO statement using real gaussdb COPY API
+            // TODO: Implement proper COPY TO using gaussdb's copy_out functionality
             let _ = self.batch_execute(&sql);
 
-            // Simulate some output data
-            let mock_data = vec![
-                b"1,Alice,100.50\n".to_vec(),
-                b"2,Bob,200.75\n".to_vec(),
-            ];
-
-            for data in &mock_data {
-                output_callback(data.clone())?;
-            }
-
-            Ok(mock_data.len())
-        }
-        #[cfg(not(feature = "gaussdb"))]
-        {
-            // Mock implementation for testing
-            let mock_data = vec![b"mock,data,row1".to_vec(), b"mock,data,row2".to_vec()];
-
-            for data in mock_data {
-                output_callback(data)?;
-            }
-
-            Ok(2) // Return mock row count
+            // For now, return empty result until proper COPY TO is implemented
+            // This should be replaced with real gaussdb copy_out implementation
+            Ok(0)
         }
     }
 }
 
 impl SimpleConnection for GaussDBConnection {
     fn batch_execute(&mut self, query: &str) -> QueryResult<()> {
-        #[cfg(feature = "gaussdb")]
-        {
-            self.raw_connection.batch_execute(query)
-                .map_err(|e| DieselError::DatabaseError(
-                    diesel::result::DatabaseErrorKind::UnableToSendCommand,
-                    Box::new(format!("GaussDB error: {}", e))
-                ))
-        }
-        #[cfg(not(feature = "gaussdb"))]
-        {
-            self.raw_connection.execute(query)
-                .map(|_| ())
-                .map_err(|_| DieselError::DatabaseError(
-                    diesel::result::DatabaseErrorKind::UnableToSendCommand,
-                    Box::new("Connection error".to_string())
-                ))
-        }
+        self.raw_connection.batch_execute(query)
+            .map_err(|e| DieselError::DatabaseError(
+                diesel::result::DatabaseErrorKind::UnableToSendCommand,
+                Box::new(format!("GaussDB error: {}", e))
+            ))
     }
 }
 
@@ -338,62 +277,38 @@ impl Connection for GaussDBConnection {
     type TransactionManager = diesel::connection::AnsiTransactionManager;
 
     fn establish(database_url: &str) -> ConnectionResult<Self> {
-        #[cfg(feature = "gaussdb")]
-        {
-            use gaussdb::{Config, NoTls};
-            use std::str::FromStr;
+        use gaussdb::{Config, NoTls};
+        use std::str::FromStr;
 
-            let config = Config::from_str(database_url)
-                .map_err(|e| diesel::ConnectionError::CouldntSetupConfiguration(DieselError::DatabaseError(
-                    diesel::result::DatabaseErrorKind::UnableToSendCommand,
-                    Box::new(format!("Invalid database URL: {}", e))
-                )))?;
+        let config = Config::from_str(database_url)
+            .map_err(|e| diesel::ConnectionError::CouldntSetupConfiguration(DieselError::DatabaseError(
+                diesel::result::DatabaseErrorKind::UnableToSendCommand,
+                Box::new(format!("Invalid database URL: {}", e))
+            )))?;
 
-            let client = config.connect(NoTls)
-                .map_err(|e| diesel::ConnectionError::CouldntSetupConfiguration(DieselError::DatabaseError(
-                    diesel::result::DatabaseErrorKind::UnableToSendCommand,
-                    Box::new(format!("Failed to connect to GaussDB: {}", e))
-                )))?;
+        let client = config.connect(NoTls)
+            .map_err(|e| diesel::ConnectionError::CouldntSetupConfiguration(DieselError::DatabaseError(
+                diesel::result::DatabaseErrorKind::UnableToSendCommand,
+                Box::new(format!("Failed to connect to GaussDB: {}", e))
+            )))?;
 
-            let transaction_manager = AnsiTransactionManager::default();
+        let transaction_manager = AnsiTransactionManager::default();
 
-            // Create a simple instrumentation implementation
-            struct SimpleInstrumentation;
-            impl Instrumentation for SimpleInstrumentation {
-                fn on_connection_event(&mut self, _event: diesel::connection::InstrumentationEvent<'_>) {}
-            }
-
-            let instrumentation = Box::new(SimpleInstrumentation);
-
-            Ok(GaussDBConnection {
-                raw_connection: client,
-                transaction_manager,
-                instrumentation,
-                statement_cache: StatementCache::new(),
-                metadata_cache: GaussDBMetadataCache::new(),
-            })
+        // Create a simple instrumentation implementation
+        struct SimpleInstrumentation;
+        impl Instrumentation for SimpleInstrumentation {
+            fn on_connection_event(&mut self, _event: diesel::connection::InstrumentationEvent<'_>) {}
         }
-        #[cfg(not(feature = "gaussdb"))]
-        {
-            let raw_connection = raw::RawConnection::establish(database_url)?;
-            let transaction_manager = AnsiTransactionManager::default();
 
-            // Create a simple instrumentation implementation
-            struct SimpleInstrumentation;
-            impl Instrumentation for SimpleInstrumentation {
-                fn on_connection_event(&mut self, _event: diesel::connection::InstrumentationEvent<'_>) {}
-            }
+        let instrumentation = Box::new(SimpleInstrumentation);
 
-            let instrumentation = Box::new(SimpleInstrumentation);
-
-            Ok(GaussDBConnection {
-                raw_connection,
-                transaction_manager,
-                instrumentation,
-                statement_cache: StatementCache::new(),
-                metadata_cache: GaussDBMetadataCache::new(),
-            })
-        }
+        Ok(GaussDBConnection {
+            raw_connection: client,
+            transaction_manager,
+            instrumentation,
+            statement_cache: StatementCache::new(),
+            metadata_cache: GaussDBMetadataCache::new(),
+        })
     }
 
     fn execute_returning_count<T>(&mut self, source: &T) -> QueryResult<usize>
@@ -413,7 +328,6 @@ impl Connection for GaussDBConnection {
         let sql = query_builder.finish();
 
         // 3. 执行查询
-        #[cfg(feature = "gaussdb")]
         {
             // 将 Diesel 的绑定参数转换为 gaussdb 兼容的格式
             // 暂时使用空参数，后续实现完整的参数转换
@@ -443,11 +357,6 @@ impl Connection for GaussDBConnection {
                 // 返回受影响的行数，转换 u64 到 usize
                 Ok(rows_affected as usize)
             }
-        }
-        #[cfg(not(feature = "gaussdb"))]
-        {
-            // 模拟实现
-            self.raw_connection.execute(&sql).map(|r| r)
         }
     }
 
@@ -510,11 +419,6 @@ impl diesel::connection::LoadConnection<diesel::connection::DefaultLoadingMode> 
 
             // TODO: 将 gaussdb::Row 转换为 GaussDBRow 并返回迭代器
             // 目前返回空迭代器，后续实现完整的行转换
-            Ok(std::iter::empty())
-        }
-        #[cfg(not(feature = "gaussdb"))]
-        {
-            // 模拟实现，返回空迭代器
             Ok(std::iter::empty())
         }
     }

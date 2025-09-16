@@ -73,7 +73,6 @@ impl<ST> LoadingMode<ST> for DefaultLoadingMode<ST> {
         query.to_sql(&mut query_builder, &GaussDB)?;
         let sql = query_builder.finish();
 
-        #[cfg(feature = "gaussdb")]
         {
             let empty_params: Vec<&(dyn gaussdb::types::ToSql + Sync)> = vec![];
             let rows = connection.raw_connection().query(&sql, &empty_params)
@@ -87,33 +86,6 @@ impl<ST> LoadingMode<ST> for DefaultLoadingMode<ST> {
             for row in rows {
                 result.push(GaussDBRow::new_owned(row));
             }
-            Ok(result)
-        }
-        #[cfg(not(feature = "gaussdb"))]
-        {
-            // Mock implementation for testing
-            use crate::connection::result::MockRow;
-            
-            let mock_rows = vec![
-                MockRow {
-                    columns: vec![
-                        ("id".to_string(), Some(b"1".to_vec())),
-                        ("name".to_string(), Some(b"Alice".to_vec())),
-                    ],
-                },
-                MockRow {
-                    columns: vec![
-                        ("id".to_string(), Some(b"2".to_vec())),
-                        ("name".to_string(), Some(b"Bob".to_vec())),
-                    ],
-                },
-            ];
-            
-            let result: Vec<GaussDBRow<'static>> = mock_rows
-                .into_iter()
-                .map(|row| GaussDBRow::new_mock_owned(row))
-                .collect();
-            
             Ok(result)
         }
     }
@@ -186,7 +158,6 @@ impl<'conn> GaussDBRowIterator<'conn> {
 
         let fetch_sql = format!("FETCH 1 FROM {}", self.cursor_name);
         
-        #[cfg(feature = "gaussdb")]
         {
             let empty_params: Vec<&(dyn gaussdb::types::ToSql + Sync)> = vec![];
             let rows = self.connection.raw_connection().query(&fetch_sql, &empty_params)
@@ -201,28 +172,6 @@ impl<'conn> GaussDBRowIterator<'conn> {
             } else {
                 Ok(Some(GaussDBRow::new_owned(rows.into_iter().next().unwrap())))
             }
-        }
-        #[cfg(not(feature = "gaussdb"))]
-        {
-            // Mock implementation - simulate finishing after a few rows
-            static mut MOCK_COUNTER: usize = 0;
-            unsafe {
-                MOCK_COUNTER += 1;
-                if MOCK_COUNTER > 3 {
-                    MOCK_COUNTER = 0;
-                    self.is_finished = true;
-                    return Ok(None);
-                }
-            }
-            
-            use crate::connection::result::MockRow;
-            let mock_row = MockRow {
-                columns: vec![
-                    ("id".to_string(), Some(format!("{}", unsafe { MOCK_COUNTER }).into_bytes())),
-                    ("data".to_string(), Some(b"mock_data".to_vec())),
-                ],
-            };
-            Ok(Some(GaussDBRow::new_mock_owned(mock_row)))
         }
     }
 
@@ -257,7 +206,6 @@ impl<ST> LoadingMode<ST> for GaussDBRowByRowLoadingMode<ST> {
         query.to_sql(&mut query_builder, &GaussDB)?;
         let sql = query_builder.finish();
 
-        #[cfg(feature = "gaussdb")]
         {
             let empty_params: Vec<&(dyn gaussdb::types::ToSql + Sync)> = vec![];
             let rows = connection.raw_connection().query(&sql, &empty_params)
@@ -271,33 +219,6 @@ impl<ST> LoadingMode<ST> for GaussDBRowByRowLoadingMode<ST> {
             for row in rows {
                 result.push(GaussDBRow::new_owned(row));
             }
-            Ok(result)
-        }
-        #[cfg(not(feature = "gaussdb"))]
-        {
-            // Mock implementation for testing
-            use crate::connection::result::MockRow;
-
-            let mock_rows = vec![
-                MockRow {
-                    columns: vec![
-                        ("id".to_string(), Some(b"1".to_vec())),
-                        ("name".to_string(), Some(b"Alice".to_vec())),
-                    ],
-                },
-                MockRow {
-                    columns: vec![
-                        ("id".to_string(), Some(b"2".to_vec())),
-                        ("name".to_string(), Some(b"Bob".to_vec())),
-                    ],
-                },
-            ];
-
-            let result: Vec<GaussDBRow<'static>> = mock_rows
-                .into_iter()
-                .map(|row| GaussDBRow::new_mock_owned(row))
-                .collect();
-
             Ok(result)
         }
     }
@@ -361,7 +282,6 @@ impl LoadingModeDsl for GaussDBConnection {
     }
 
     fn load_sql_with_default(&mut self, sql: &str) -> QueryResult<Vec<GaussDBRow<'static>>> {
-        #[cfg(feature = "gaussdb")]
         {
             let empty_params: Vec<&(dyn gaussdb::types::ToSql + Sync)> = vec![];
             let rows = self.raw_connection().query(sql, &empty_params)
@@ -375,33 +295,6 @@ impl LoadingModeDsl for GaussDBConnection {
             for row in rows {
                 result.push(GaussDBRow::new_owned(row));
             }
-            Ok(result)
-        }
-        #[cfg(not(feature = "gaussdb"))]
-        {
-            // Mock implementation for testing
-            use crate::connection::result::MockRow;
-
-            let mock_rows = vec![
-                MockRow {
-                    columns: vec![
-                        ("id".to_string(), Some(b"1".to_vec())),
-                        ("name".to_string(), Some(b"Alice".to_vec())),
-                    ],
-                },
-                MockRow {
-                    columns: vec![
-                        ("id".to_string(), Some(b"2".to_vec())),
-                        ("name".to_string(), Some(b"Bob".to_vec())),
-                    ],
-                },
-            ];
-
-            let result: Vec<GaussDBRow<'static>> = mock_rows
-                .into_iter()
-                .map(|row| GaussDBRow::new_mock_owned(row))
-                .collect();
-
             Ok(result)
         }
     }

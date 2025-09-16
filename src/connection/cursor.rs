@@ -139,7 +139,6 @@ impl<'conn> GaussDBCursor<'conn> {
 
         let fetch_sql = format!("FETCH {} FROM {}", count, self.name);
         
-        #[cfg(feature = "gaussdb")]
         {
             let empty_params: Vec<&(dyn gaussdb::types::ToSql + Sync)> = vec![];
             let rows = self.connection.raw_connection().query(&fetch_sql, &empty_params)
@@ -154,24 +153,6 @@ impl<'conn> GaussDBCursor<'conn> {
                 result.push(GaussDBRow::new_owned(row));
             }
             Ok(result)
-        }
-        #[cfg(not(feature = "gaussdb"))]
-        {
-            // Mock implementation for testing
-            use crate::connection::result::MockRow;
-            
-            // Simulate fetching some mock data
-            if count > 0 {
-                let mock_row = MockRow {
-                    columns: vec![
-                        ("id".to_string(), Some(b"1".to_vec())),
-                        ("data".to_string(), Some(b"test_data".to_vec())),
-                    ],
-                };
-                Ok(vec![GaussDBRow::new_mock_owned(mock_row)])
-            } else {
-                Ok(vec![])
-            }
         }
     }
 
@@ -188,7 +169,6 @@ impl<'conn> GaussDBCursor<'conn> {
     pub fn fetch_all(&mut self) -> QueryResult<Vec<GaussDBRow<'static>>> {
         let fetch_sql = format!("FETCH ALL FROM {}", self.name);
         
-        #[cfg(feature = "gaussdb")]
         {
             let empty_params: Vec<&(dyn gaussdb::types::ToSql + Sync)> = vec![];
             let rows = self.connection.raw_connection().query(&fetch_sql, &empty_params)
@@ -203,11 +183,6 @@ impl<'conn> GaussDBCursor<'conn> {
                 result.push(GaussDBRow::new_owned(row));
             }
             Ok(result)
-        }
-        #[cfg(not(feature = "gaussdb"))]
-        {
-            // Mock implementation - return empty for testing
-            Ok(vec![])
         }
     }
 

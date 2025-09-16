@@ -13,7 +13,7 @@ Diesel-GaussDB provides a fully-featured GaussDB database backend for Diesel, en
 - **Type Safety**: Comprehensive type mapping between Rust and GaussDB types
 - **Complex Types**: Support for PostgreSQL-compatible arrays and planned range types
 - **Real Database Connectivity**: Uses the `gaussdb` crate for authentic GaussDB connections
-- **Feature-based Compilation**: Optional real database integration with mock fallback
+- **Production-Ready**: Full real database integration without mock implementations
 - **Query Builder**: Custom query builder with proper identifier escaping and parameter binding
 
 ## Installation

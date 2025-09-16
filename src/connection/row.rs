@@ -14,26 +14,16 @@ use std::fmt;
 /// This represents a single row returned from a GaussDB query.
 /// It provides access to individual fields by index or name.
 pub struct GaussDBRow<'a> {
-    #[cfg(feature = "gaussdb")]
     inner: GaussDBRowInner<'a>,
-    #[cfg(not(feature = "gaussdb"))]
-    inner: MockRowInner<'a>,
 }
 
-#[cfg(feature = "gaussdb")]
 enum GaussDBRowInner<'a> {
     Borrowed(&'a gaussdb::Row),
     Owned(gaussdb::Row),
 }
 
-#[cfg(not(feature = "gaussdb"))]
-struct MockRowInner<'a> {
-    columns: &'a [(String, Option<Vec<u8>>)],
-}
-
 impl<'a> GaussDBRow<'a> {
     /// Create a new GaussDBRow from a gaussdb::Row reference
-    #[cfg(feature = "gaussdb")]
     pub fn new(row: &'a gaussdb::Row) -> Self {
         Self {
             inner: GaussDBRowInner::Borrowed(row),
@@ -41,48 +31,19 @@ impl<'a> GaussDBRow<'a> {
     }
 
     /// Create a new owned GaussDBRow from a gaussdb::Row
-    #[cfg(feature = "gaussdb")]
     pub fn new_owned(row: gaussdb::Row) -> GaussDBRow<'static> {
         GaussDBRow {
             inner: GaussDBRowInner::Owned(row),
         }
     }
 
-    /// Create a mock row for testing
-    #[cfg(not(feature = "gaussdb"))]
-    pub fn new_mock(mock_row: &'a super::result::MockRow) -> Self {
-        Self {
-            inner: MockRowInner {
-                columns: &mock_row.columns,
-            },
-        }
-    }
 
-    /// Create an owned mock row for testing
-    #[cfg(not(feature = "gaussdb"))]
-    pub fn new_mock_owned(mock_row: super::result::MockRow) -> GaussDBRow<'static> {
-        // For mock implementation, we'll leak the memory for simplicity
-        // In a real implementation, this would be properly managed
-        let leaked: &'static [(String, Option<Vec<u8>>)] = Box::leak(mock_row.columns.into_boxed_slice());
-        GaussDBRow {
-            inner: MockRowInner {
-                columns: leaked,
-            },
-        }
-    }
 
     /// Get the number of fields in this row
     pub fn len(&self) -> usize {
-        #[cfg(feature = "gaussdb")]
-        {
-            match &self.inner {
-                GaussDBRowInner::Borrowed(row) => row.len(),
-                GaussDBRowInner::Owned(row) => row.len(),
-            }
-        }
-        #[cfg(not(feature = "gaussdb"))]
-        {
-            self.inner.columns.len()
+        match &self.inner {
+            GaussDBRowInner::Borrowed(row) => row.len(),
+            GaussDBRowInner::Owned(row) => row.len(),
         }
     }
 
@@ -111,7 +72,6 @@ impl<'a> GaussDBRow<'a> {
 
     /// Find the index of a column by name
     fn find_column_index(&self, _name: &str) -> Option<usize> {
-        #[cfg(feature = "gaussdb")]
         {
             let _row = match &self.inner {
                 GaussDBRowInner::Borrowed(row) => row,
@@ -123,33 +83,19 @@ impl<'a> GaussDBRow<'a> {
             // For now, return None as a placeholder
             None
         }
-        #[cfg(not(feature = "gaussdb"))]
-        {
-            self.inner.columns
-                .iter()
-                .position(|(col_name, _)| col_name == name)
-        }
     }
 
     /// Get the column name at the given index
     fn column_name(&self, _index: usize) -> Option<&str> {
-        #[cfg(feature = "gaussdb")]
         {
             // gaussdb crate doesn't expose column names directly
             // This would need to be implemented based on the actual API
             None
         }
-        #[cfg(not(feature = "gaussdb"))]
-        {
-            self.inner.columns
-                .get(index)
-                .map(|(name, _)| name.as_str())
-        }
     }
 
     /// Get the raw value at the given index
     fn get_raw_value(&self, _index: usize) -> Option<GaussDBValue<'_>> {
-        #[cfg(feature = "gaussdb")]
         {
             let _row = match &self.inner {
                 GaussDBRowInner::Borrowed(row) => row,
@@ -159,12 +105,6 @@ impl<'a> GaussDBRow<'a> {
             // This would need to be implemented based on the gaussdb crate API
             // For now, return a placeholder
             Some(GaussDBValue::new(None, 0))
-        }
-        #[cfg(not(feature = "gaussdb"))]
-        {
-            self.inner.columns
-                .get(index)
-                .map(|(_, value)| GaussDBValue::new(value.as_deref(), 25)) // 25 = text type OID
         }
     }
 }
@@ -292,76 +232,4 @@ impl TypeOidLookup for GaussDBField<'_> {
 #[cfg(test)]
 mod tests {
     // Tests will be added when row functionality is fully implemented
-
-    #[test]
-    #[cfg(not(feature = "gaussdb"))]
-    fn test_mock_row_creation() {
-        use crate::connection::result::MockRow;
-        
-        let mock_row = MockRow {
-            columns: vec![
-                ("id".to_string(), Some(b"1".to_vec())),
-                ("name".to_string(), Some(b"test".to_vec())),
-                ("email".to_string(), None),
-            ],
-        };
-
-        let row = GaussDBRow::new_mock(&mock_row);
-        assert_eq!(row.len(), 3);
-        assert!(!row.is_empty());
-    }
-
-    #[test]
-    #[cfg(not(feature = "gaussdb"))]
-    fn test_field_access() {
-        use crate::connection::result::MockRow;
-        
-        let mock_row = MockRow {
-            columns: vec![
-                ("id".to_string(), Some(b"1".to_vec())),
-                ("name".to_string(), Some(b"test".to_vec())),
-            ],
-        };
-
-        let row = GaussDBRow::new_mock(&mock_row);
-        
-        // Test field access by index
-        let field0 = row.get_field(0).unwrap();
-        assert_eq!(field0.index(), 0);
-        assert!(!field0.is_null());
-        
-        // Test field access by name
-        let field_by_name = row.get_field_by_name("name").unwrap();
-        assert_eq!(field_by_name.index(), 1);
-        assert!(!field_by_name.is_null());
-        
-        // Test non-existent field
-        assert!(row.get_field_by_name("nonexistent").is_none());
-        assert!(row.get_field(10).is_none());
-    }
-
-    #[test]
-    #[cfg(not(feature = "gaussdb"))]
-    fn test_row_indexing() {
-        use crate::connection::result::MockRow;
-        
-        let mock_row = MockRow {
-            columns: vec![
-                ("id".to_string(), Some(b"1".to_vec())),
-                ("name".to_string(), Some(b"test".to_vec())),
-            ],
-        };
-
-        let row = GaussDBRow::new_mock(&mock_row);
-        
-        // Test indexing by position
-        assert_eq!(row.idx(0), Some(0));
-        assert_eq!(row.idx(1), Some(1));
-        assert_eq!(row.idx(2), None);
-        
-        // Test indexing by name
-        assert_eq!(row.idx("id"), Some(0));
-        assert_eq!(row.idx("name"), Some(1));
-        assert_eq!(row.idx("nonexistent"), None);
-    }
 }
