@@ -132,6 +132,7 @@ where
 
 /// Internal representation of a COPY TO command
 pub(crate) struct CopyToCommand<S> {
+    #[allow(dead_code)] // 将在 COPY TO 完全实现时使用
     pub(crate) target: S,
 }
 
@@ -165,6 +166,22 @@ pub trait ExecuteCopyToDsl<T> {
     fn execute_copy_to<F>(self, callback: F) -> QueryResult<usize>
     where
         F: FnMut(Vec<u8>) -> QueryResult<()>;
+}
+
+// Implementation for GaussDBConnection
+impl<T> ExecuteCopyToDsl<T> for &mut crate::connection::GaussDBConnection
+where
+    T: QueryFragment<crate::backend::GaussDB> + QueryId,
+{
+    fn execute_copy_to<F>(self, callback: F) -> QueryResult<usize>
+    where
+        F: FnMut(Vec<u8>) -> QueryResult<()>,
+    {
+        // This would be implemented with a proper COPY TO query
+        // For now, we'll use a placeholder implementation
+        let query = CopyToCommand::<()>::new(());
+        self.execute_copy_to(&query, callback)
+    }
 }
 
 /// Helper function to create a COPY TO query

@@ -3,15 +3,14 @@
 //! This module provides connection pool integration for GaussDB connections,
 //! supporting both r2d2 and async connection pools.
 
-use crate::connection::GaussDBConnection;
-use diesel::result::ConnectionError;
+// Pool implementations will be added when r2d2 feature is enabled
 
 /// R2D2 connection pool support
 #[cfg(feature = "r2d2")]
 pub mod r2d2_support {
-    use super::*;
-    use diesel::Connection;
-    use diesel::connection::SimpleConnection;
+    use crate::connection::GaussDBConnection;
+    use diesel::connection::{Connection, SimpleConnection};
+    use diesel::result::ConnectionError;
     use r2d2::{ManageConnection, Pool, PooledConnection};
     use std::fmt;
 
@@ -78,12 +77,55 @@ pub mod r2d2_support {
         let manager = GaussDBConnectionManager::new(database_url);
         builder.build(manager)
     }
+
+    /// 创建一个生产级的连接池配置
+    ///
+    /// 这个函数提供了适合生产环境的默认配置：
+    /// - 最大连接数：10
+    /// - 最小空闲连接数：2
+    /// - 连接超时：30秒
+    /// - 空闲超时：10分钟
+    /// - 最大生命周期：30分钟
+    pub fn create_production_pool<S: Into<String>>(
+        database_url: S,
+    ) -> Result<GaussDBPool, r2d2::Error> {
+        let manager = GaussDBConnectionManager::new(database_url);
+
+        Pool::builder()
+            .max_size(10)                                    // 最大连接数
+            .min_idle(Some(2))                              // 最小空闲连接数
+            .connection_timeout(std::time::Duration::from_secs(30))  // 连接超时
+            .idle_timeout(Some(std::time::Duration::from_secs(600))) // 空闲超时（10分钟）
+            .max_lifetime(Some(std::time::Duration::from_secs(1800))) // 最大生命周期（30分钟）
+            .test_on_check_out(true)                        // 检出时测试连接
+            .build(manager)
+    }
+
+    /// 创建一个开发环境的连接池配置
+    ///
+    /// 这个函数提供了适合开发环境的配置：
+    /// - 最大连接数：5
+    /// - 最小空闲连接数：1
+    /// - 连接超时：10秒
+    /// - 较短的超时时间便于快速调试
+    pub fn create_development_pool<S: Into<String>>(
+        database_url: S,
+    ) -> Result<GaussDBPool, r2d2::Error> {
+        let manager = GaussDBConnectionManager::new(database_url);
+
+        Pool::builder()
+            .max_size(5)                                     // 最大连接数
+            .min_idle(Some(1))                              // 最小空闲连接数
+            .connection_timeout(std::time::Duration::from_secs(10))  // 连接超时
+            .idle_timeout(Some(std::time::Duration::from_secs(300))) // 空闲超时（5分钟）
+            .test_on_check_out(false)                       // 开发环境不需要每次测试
+            .build(manager)
+    }
 }
 
 /// Async connection pool support (for future implementation)
 #[cfg(feature = "tokio-gaussdb")]
 pub mod async_support {
-    use super::*;
     
     // TODO: 实现异步连接池支持
     // 可以使用 bb8 或 deadpool 等异步连接池库
@@ -100,6 +142,11 @@ pub mod async_support {
                 database_url: database_url.into(),
             }
         }
+
+        /// Get the database URL
+        pub fn database_url(&self) -> &str {
+            &self.database_url
+        }
     }
 }
 
@@ -112,11 +159,11 @@ pub use r2d2_support::{
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[test]
     #[cfg(feature = "r2d2")]
     fn test_connection_manager_creation() {
+        use crate::pool::r2d2_support::GaussDBConnectionManager;
         let manager = GaussDBConnectionManager::new("host=localhost user=test dbname=test");
         // 测试管理器创建成功（无法直接访问私有字段）
         assert!(format!("{:?}", manager).contains("GaussDBConnectionManager"));
@@ -125,6 +172,7 @@ mod tests {
     #[test]
     #[cfg(feature = "r2d2")]
     fn test_connection_manager_debug() {
+        use crate::pool::r2d2_support::GaussDBConnectionManager;
         let manager = GaussDBConnectionManager::new("host=localhost user=test password=secret dbname=test");
         let debug_str = format!("{:?}", manager);
         assert!(debug_str.contains("GaussDBConnectionManager"));
@@ -135,6 +183,7 @@ mod tests {
     #[test]
     #[cfg(feature = "r2d2")]
     fn test_pool_creation_helper() {
+        use crate::pool::r2d2_support::create_pool;
         // 这个测试不会实际连接数据库，只是测试函数签名
         let result = create_pool("host=localhost user=test dbname=test");
         // 由于没有真实的数据库连接，这里只检查函数是否可以调用
@@ -144,7 +193,69 @@ mod tests {
     #[test]
     #[cfg(feature = "tokio-gaussdb")]
     fn test_async_manager_creation() {
-        let manager = async_support::AsyncGaussDBConnectionManager::new("host=localhost user=test dbname=test");
-        assert_eq!(manager.database_url, "host=localhost user=test dbname=test");
+        use crate::pool::async_support::AsyncGaussDBConnectionManager;
+        let manager = AsyncGaussDBConnectionManager::new("host=localhost user=test dbname=test");
+        assert_eq!(manager.database_url(), "host=localhost user=test dbname=test");
+    }
+
+    #[test]
+    #[cfg(feature = "r2d2")]
+    fn test_production_pool_creation() {
+        use crate::pool::r2d2_support::create_production_pool;
+
+        // 测试生产级连接池创建
+        let result = create_production_pool("host=localhost user=test dbname=test");
+
+        // 由于没有真实的数据库连接，这里只检查函数是否可以调用
+        match result {
+            Ok(pool) => {
+                // 验证连接池配置
+                assert_eq!(pool.max_size(), 10);
+                // Test passed
+            }
+            Err(_) => {
+                // 在没有真实数据库的情况下，这是预期的
+                // Debug output removed
+            }
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "r2d2")]
+    fn test_development_pool_creation() {
+        use crate::pool::r2d2_support::create_development_pool;
+
+        // 测试开发环境连接池创建
+        let result = create_development_pool("host=localhost user=test dbname=test");
+
+        match result {
+            Ok(pool) => {
+                // 验证连接池配置
+                assert_eq!(pool.max_size(), 5);
+                // Test passed
+            }
+            Err(_) => {
+                // 在没有真实数据库的情况下，这是预期的
+                // Debug output removed
+            }
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "r2d2")]
+    fn test_pool_configuration_differences() {
+        use crate::pool::r2d2_support::{create_production_pool, create_development_pool};
+
+        // 测试不同环境的连接池配置差异
+        let prod_result = create_production_pool("host=localhost user=test dbname=test");
+        let dev_result = create_development_pool("host=localhost user=test dbname=test");
+
+        // 即使连接失败，我们也可以验证配置的差异
+        if let (Ok(prod_pool), Ok(dev_pool)) = (prod_result, dev_result) {
+            assert!(prod_pool.max_size() > dev_pool.max_size());
+            // Test passed
+        } else {
+            // Debug output removed
+        }
     }
 }

@@ -12,6 +12,10 @@ use diesel::sql_types::Numeric;
 use byteorder::{NetworkEndian, ReadBytesExt, WriteBytesExt};
 // Note: std::error::Error import removed as it's unused
 
+#[cfg(feature = "bigdecimal")]
+use bigdecimal::BigDecimal;
+// Note: std::io::Write import removed as it's unused in current implementation
+
 /// Represents a NUMERIC value, closely mirroring the PostgreSQL wire protocol
 /// representation for GaussDB compatibility.
 #[derive(Debug, Default, Clone, PartialEq, Eq, AsExpression, FromSqlRow)]
@@ -266,5 +270,31 @@ mod tests {
     fn test_default() {
         let default = GaussDBNumeric::default();
         assert!(default.is_nan());
+    }
+}
+
+// BigDecimal support for GaussDB
+#[cfg(feature = "bigdecimal")]
+impl ToSql<Numeric, GaussDB> for BigDecimal {
+    fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, GaussDB>) -> serialize::Result {
+        // Convert BigDecimal to string and then parse as PostgreSQL numeric format
+        let string_repr = self.to_string();
+        out.write_all(string_repr.as_bytes())?;
+        Ok(IsNull::No)
+    }
+}
+
+#[cfg(feature = "bigdecimal")]
+impl FromSql<Numeric, GaussDB> for BigDecimal {
+    fn from_sql(bytes: GaussDBValue) -> deserialize::Result<Self> {
+        // For now, return a simple BigDecimal from string representation
+        // In a full implementation, this would parse the PostgreSQL numeric format
+        if let Some(data) = bytes.as_bytes() {
+            let string_repr = std::str::from_utf8(data)?;
+            Ok(BigDecimal::parse_bytes(string_repr.as_bytes(), 10)
+                .ok_or_else(|| "Invalid numeric format".to_string())?)
+        } else {
+            Err("Unexpected null value for numeric".into())
+        }
     }
 }

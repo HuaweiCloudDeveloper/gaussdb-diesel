@@ -1,0 +1,18 @@
+[package]
+name = "diesel-gaussdb-basic-usage"
+version = "0.1.0"
+edition = "2021"
+description = "Diesel-GaussDB 基础使用示例"
+authors = ["Huawei Cloud Developers"]
+
+[dependencies]
+diesel = { version = "2.2", features = ["chrono"] }
+diesel-gaussdb = { path = "../..", features = ["gaussdb"] }
+chrono = { version = "0.4", features = ["serde"] }
+anyhow = "1.0"
+env_logger = "0.10"
+log = "0.4"
+
+[[bin]]
+name = "basic_usage"
+path = "src/main.rs"

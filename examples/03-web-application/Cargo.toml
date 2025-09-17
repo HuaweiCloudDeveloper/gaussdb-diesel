@@ -1,0 +1,35 @@
+[package]
+name = "diesel-gaussdb-web-app"
+version = "0.1.0"
+edition = "2021"
+description = "Diesel-GaussDB Web 应用示例"
+authors = ["Huawei Cloud Developers"]
+
+[dependencies]
+# Web 框架
+axum = "0.7"
+tokio = { version = "1.0", features = ["full"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors"] }
+
+# 数据库
+diesel = { version = "2.2", features = ["chrono"] }
+diesel-gaussdb = { path = "../..", features = ["gaussdb"] }
+
+# 序列化
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# 时间处理
+chrono = { version = "0.4", features = ["serde"] }
+
+# 错误处理
+anyhow = "1.0"
+
+# 日志
+log = "0.4"
+env_logger = "0.10"
+
+[[bin]]
+name = "web_server"
+path = "src/main.rs"

@@ -35,6 +35,8 @@
 pub mod backend;
 pub mod connection;
 pub mod metadata_lookup;
+pub mod monitoring;
+pub mod performance;
 pub mod pool;
 pub mod query_builder;
 pub mod types;
@@ -46,7 +48,11 @@ pub mod value;
 
 // Re-export core types
 pub use backend::GaussDB;
-pub use connection::GaussDBConnection;
+pub use connection::{
+    GaussDBConnection, GaussDBCursor, CursorDsl,
+    DefaultLoadingMode, GaussDBRowByRowLoadingMode, GaussDBRowIterator,
+    LoadingMode, LoadingModeDsl
+};
 pub use query_builder::GaussDBQueryBuilder;
 
 /// Data types for GaussDB
@@ -64,6 +70,8 @@ pub mod prelude {
     pub use crate::backend::GaussDB;
     pub use crate::connection::GaussDBConnection;
     pub use crate::query_builder::GaussDBQueryBuilder;
+    pub use crate::expression::array_ops::ArrayContainmentOps;
+    pub use crate::expression::expression_methods::GaussDBStringExpressionMethods;
 
     // Connection pool support
     #[cfg(feature = "r2d2")]
@@ -74,7 +82,7 @@ pub mod prelude {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    // Library-level tests will be added as needed
 
     #[test]
     fn test_query_builder_advanced_features() {
@@ -229,10 +237,10 @@ mod tests {
         use crate::expression::*;
 
         // Test that expression modules are accessible
-        array::array_placeholder();
-        array_comparison::any_placeholder();
-        array_comparison::all_placeholder();
-        expression_methods::expression_methods_placeholder();
+        use diesel::sql_types::{Array, Integer};
+        let _any_expr = array_comparison::any(diesel::dsl::sql::<Array<Integer>>("ARRAY[1,2,3]"));
+        let _all_expr = array_comparison::all(diesel::dsl::sql::<Array<Integer>>("ARRAY[1,2,3]"));
+
         functions::functions_placeholder();
         operators::operators_placeholder();
         dsl::dsl_placeholder();

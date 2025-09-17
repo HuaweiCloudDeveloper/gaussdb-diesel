@@ -3,8 +3,7 @@
 //! This module provides support for PostgreSQL-style JSON types,
 //! which are also supported by GaussDB.
 
-#[cfg(feature = "serde_json")]
-extern crate serde_json;
+
 
 use std::io::prelude::*;
 
@@ -12,11 +11,11 @@ use crate::backend::GaussDB;
 use crate::value::GaussDBValue;
 use diesel::deserialize::{self, FromSql};
 use diesel::serialize::{self, IsNull, Output, ToSql};
-use diesel::sql_types;
+use diesel::sql_types::{Json, Jsonb};
 
 /// JSON type implementation for GaussDB
 #[cfg(feature = "serde_json")]
-impl FromSql<sql_types::Json, GaussDB> for serde_json::Value {
+impl FromSql<Json, GaussDB> for serde_json::Value {
     fn from_sql(value: GaussDBValue<'_>) -> deserialize::Result<Self> {
         let bytes = value.as_bytes().ok_or("JSON value is null")?;
         serde_json::from_slice(bytes).map_err(|_| "Invalid Json".into())
@@ -24,7 +23,7 @@ impl FromSql<sql_types::Json, GaussDB> for serde_json::Value {
 }
 
 #[cfg(feature = "serde_json")]
-impl ToSql<sql_types::Json, GaussDB> for serde_json::Value {
+impl ToSql<Json, GaussDB> for serde_json::Value {
     fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, GaussDB>) -> serialize::Result {
         serde_json::to_writer(out, self)
             .map(|_| IsNull::No)
@@ -34,7 +33,7 @@ impl ToSql<sql_types::Json, GaussDB> for serde_json::Value {
 
 /// JSONB type implementation for GaussDB
 #[cfg(feature = "serde_json")]
-impl FromSql<sql_types::Jsonb, GaussDB> for serde_json::Value {
+impl FromSql<Jsonb, GaussDB> for serde_json::Value {
     fn from_sql(value: GaussDBValue<'_>) -> deserialize::Result<Self> {
         let bytes = value.as_bytes().ok_or("JSONB value is null")?;
         if bytes.is_empty() {
@@ -48,7 +47,7 @@ impl FromSql<sql_types::Jsonb, GaussDB> for serde_json::Value {
 }
 
 #[cfg(feature = "serde_json")]
-impl ToSql<sql_types::Jsonb, GaussDB> for serde_json::Value {
+impl ToSql<Jsonb, GaussDB> for serde_json::Value {
     fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, GaussDB>) -> serialize::Result {
         out.write_all(&[1])?;
         serde_json::to_writer(out, self)
@@ -57,45 +56,7 @@ impl ToSql<sql_types::Jsonb, GaussDB> for serde_json::Value {
     }
 }
 
-/// Custom JSON types for GaussDB
-pub mod sql_types {
-    use diesel::query_builder::QueryId;
-    use diesel::sql_types::SqlType;
 
-    /// The [`JSON`] SQL type. This is a GaussDB specific type compatible with PostgreSQL.
-    ///
-    /// ### [`ToSql`] impls
-    ///
-    /// - [`serde_json::Value`] with `feature = "serde_json"`
-    ///
-    /// ### [`FromSql`] impls
-    ///
-    /// - [`serde_json::Value`] with `feature = "serde_json"`
-    ///
-    /// [`ToSql`]: diesel::serialize::ToSql
-    /// [`FromSql`]: diesel::deserialize::FromSql
-    /// [`JSON`]: https://www.postgresql.org/docs/current/datatype-json.html
-    #[derive(Debug, Clone, Copy, Default, QueryId, SqlType)]
-    #[diesel(gaussdb_type(oid = 114, array_oid = 199))]
-    pub struct Json;
-
-    /// The [`JSONB`] SQL type. This is a GaussDB specific type compatible with PostgreSQL.
-    ///
-    /// ### [`ToSql`] impls
-    ///
-    /// - [`serde_json::Value`] with `feature = "serde_json"`
-    ///
-    /// ### [`FromSql`] impls
-    ///
-    /// - [`serde_json::Value`] with `feature = "serde_json"`
-    ///
-    /// [`ToSql`]: diesel::serialize::ToSql
-    /// [`FromSql`]: diesel::deserialize::FromSql
-    /// [`JSONB`]: https://www.postgresql.org/docs/current/datatype-json.html
-    #[derive(Debug, Clone, Copy, Default, QueryId, SqlType)]
-    #[diesel(gaussdb_type(oid = 3802, array_oid = 3807))]
-    pub struct Jsonb;
-}
 
 #[cfg(test)]
 mod tests {

@@ -61,7 +61,7 @@ macro_rules! impl_write_tuple {
             {
                 fn write_tuple(&self, out: &mut Output<'_, '_, GaussDB>) -> serialize::Result {
                     use byteorder::{NetworkEndian, WriteBytesExt};
-                    use std::io::Write;
+                    
 
                     // Write number of fields
                     out.write_u32::<NetworkEndian>($Tuple)?;

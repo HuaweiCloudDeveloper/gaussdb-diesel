@@ -13,24 +13,14 @@ use std::fmt;
 /// It provides access to the rows returned by the query and metadata about the result.
 #[derive(Debug)]
 pub struct GaussDBResult {
-    #[cfg(feature = "gaussdb")]
     rows: Vec<gaussdb::Row>,
-    #[cfg(not(feature = "gaussdb"))]
-    rows: Vec<MockRow>,
     column_count: usize,
     row_count: usize,
     rows_affected: usize,
 }
 
-#[cfg(not(feature = "gaussdb"))]
-#[derive(Debug, Clone)]
-pub(crate) struct MockRow {
-    pub(crate) columns: Vec<(String, Option<Vec<u8>>)>,
-}
-
 impl GaussDBResult {
     /// Create a new GaussDBResult from raw query results
-    #[cfg(feature = "gaussdb")]
     pub fn new(rows: Vec<gaussdb::Row>) -> QueryResult<Self> {
         let row_count = rows.len();
         let column_count = rows.first().map(|row| row.len()).unwrap_or(0);
@@ -44,7 +34,6 @@ impl GaussDBResult {
     }
 
     /// Create a new GaussDBResult for non-query operations (INSERT, UPDATE, DELETE)
-    #[cfg(feature = "gaussdb")]
     pub fn new_command_result(rows_affected: u64) -> QueryResult<Self> {
         Ok(GaussDBResult {
             rows: Vec::new(),
@@ -54,19 +43,7 @@ impl GaussDBResult {
         })
     }
 
-    /// Create a mock result for testing
-    #[cfg(not(feature = "gaussdb"))]
-    pub fn new_mock(mock_rows: Vec<MockRow>) -> QueryResult<Self> {
-        let row_count = mock_rows.len();
-        let column_count = mock_rows.first().map(|row| row.columns.len()).unwrap_or(0);
-        
-        Ok(GaussDBResult {
-            rows: mock_rows,
-            column_count,
-            row_count,
-            rows_affected: row_count,
-        })
-    }
+
 
     /// Get the number of rows returned by the query
     pub fn row_count(&self) -> usize {
@@ -99,14 +76,7 @@ impl GaussDBResult {
     /// Get a specific row by index
     pub fn get_row(&self, index: usize) -> Option<GaussDBRow<'_>> {
         if index < self.row_count {
-            #[cfg(feature = "gaussdb")]
-            {
-                Some(GaussDBRow::new(&self.rows[index]))
-            }
-            #[cfg(not(feature = "gaussdb"))]
-            {
-                Some(GaussDBRow::new_mock(&self.rows[index]))
-            }
+            Some(GaussDBRow::new(&self.rows[index]))
         } else {
             None
         }
@@ -114,14 +84,7 @@ impl GaussDBResult {
 
     /// Convert the result into a vector of rows
     pub fn into_rows(self) -> Vec<GaussDBRow<'static>> {
-        #[cfg(feature = "gaussdb")]
-        {
-            self.rows.into_iter().map(|row| GaussDBRow::new_owned(row)).collect()
-        }
-        #[cfg(not(feature = "gaussdb"))]
-        {
-            self.rows.into_iter().map(|row| GaussDBRow::new_mock_owned(row)).collect()
-        }
+        self.rows.into_iter().map(|row| GaussDBRow::new_owned(row)).collect()
     }
 }
 
@@ -253,53 +216,7 @@ pub fn convert_gaussdb_error(error: gaussdb::Error) -> Error {
 mod tests {
     use super::*;
 
-    #[test]
-    #[cfg(not(feature = "gaussdb"))]
-    fn test_mock_result_creation() {
-        let mock_rows = vec![
-            MockRow {
-                columns: vec![
-                    ("id".to_string(), Some(b"1".to_vec())),
-                    ("name".to_string(), Some(b"test".to_vec())),
-                ],
-            },
-            MockRow {
-                columns: vec![
-                    ("id".to_string(), Some(b"2".to_vec())),
-                    ("name".to_string(), Some(b"test2".to_vec())),
-                ],
-            },
-        ];
 
-        let result = GaussDBResult::new_mock(mock_rows).unwrap();
-        assert_eq!(result.row_count(), 2);
-        assert_eq!(result.column_count(), 2);
-        assert_eq!(result.rows_affected(), 2);
-        assert!(!result.is_empty());
-    }
-
-    #[test]
-    #[cfg(not(feature = "gaussdb"))]
-    fn test_result_iterator() {
-        let mock_rows = vec![
-            MockRow {
-                columns: vec![("id".to_string(), Some(b"1".to_vec()))],
-            },
-            MockRow {
-                columns: vec![("id".to_string(), Some(b"2".to_vec()))],
-            },
-        ];
-
-        let result = GaussDBResult::new_mock(mock_rows).unwrap();
-        let mut iter = result.iter();
-        
-        assert_eq!(iter.len(), 2);
-        assert!(iter.next().is_some());
-        assert_eq!(iter.len(), 1);
-        assert!(iter.next().is_some());
-        assert_eq!(iter.len(), 0);
-        assert!(iter.next().is_none());
-    }
 
     #[test]
     fn test_error_information() {

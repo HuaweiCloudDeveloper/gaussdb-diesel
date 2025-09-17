@@ -1,0 +1,52 @@
+[package]
+name = "diesel-gaussdb-blog"
+version = "0.1.0"
+edition = "2021"
+description = "基于 Diesel-GaussDB 的真实博客系统"
+authors = ["Huawei Cloud Developers"]
+
+[dependencies]
+# Web 框架
+axum = "0.7"
+tokio = { version = "1.0", features = ["full"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "fs"] }
+
+# 数据库
+diesel = { version = "2.2", features = ["chrono", "uuid"] }
+diesel-gaussdb = { path = "../..", features = ["gaussdb", "r2d2"] }
+
+# 序列化
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# 时间处理
+chrono = { version = "0.4", features = ["serde"] }
+
+# UUID
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# 错误处理
+anyhow = "1.0"
+thiserror = "1.0"
+
+# 日志
+log = "0.4"
+env_logger = "0.10"
+
+# 模板引擎
+askama = "0.12"
+askama_axum = "0.4"
+
+# 密码哈希
+bcrypt = "0.15"
+
+# 配置
+config = "0.14"
+
+# 连接池
+r2d2 = "0.8"
+
+[[bin]]
+name = "blog_server"
+path = "src/main.rs"

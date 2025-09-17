@@ -9,13 +9,25 @@ use crate::backend::GaussDB;
 
 pub mod distinct_on;
 pub mod limit_offset;
+pub mod limit_offset_impl;
 pub mod on_constraint;
 pub mod copy;
+pub mod window_functions;
+pub mod cte;
+pub mod subquery;
+pub mod query_fragment_impls;
+pub mod returning;
 
 pub use self::distinct_on::DistinctOnClause;
 pub use self::limit_offset::LimitOffsetClause;
 pub use self::on_constraint::{OnConstraint, ConflictTarget, on_constraint};
 pub use self::copy::{CopyFormat, CopyTarget, CopyOperation};
+pub use self::window_functions::{WindowFunction, OverClause, over};
+pub use self::cte::{CteDefinition, WithClause, cte, recursive_cte, with};
+pub use self::subquery::{
+    ScalarSubquery, ExistsSubquery, NotExistsSubquery, InSubquery, NotInSubquery,
+    scalar_subquery, exists, not_exists, in_subquery, not_in_subquery
+};
 
 /// The GaussDB query builder
 ///
@@ -33,7 +45,7 @@ impl GaussDBQueryBuilder {
         Self::default()
     }
 
-    /// Get the current SQL string
+    /// Get cxzAX从v不那么， the current SQL string
     pub fn sql(&self) -> &str {
         &self.sql
     }
@@ -42,6 +54,8 @@ impl GaussDBQueryBuilder {
     pub fn bind_idx(&self) -> u32 {
         self.bind_idx
     }
+
+
 }
 
 impl QueryBuilder<GaussDB> for GaussDBQueryBuilder {

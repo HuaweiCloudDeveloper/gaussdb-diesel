@@ -4,8 +4,6 @@
 
 mod write_tuple;
 
-use diesel::serialize::{self, Output, ToSql};
-use crate::backend::GaussDB;
 
 /// Re-export common serialization types
 pub use diesel::serialize::{IsNull, Result};

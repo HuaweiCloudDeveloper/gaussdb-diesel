@@ -10,7 +10,7 @@ use diesel::serialize::{self, IsNull, Output, ToSql};
 use diesel::sql_types::{Range, HasSqlType};
 use byteorder::{NetworkEndian, ReadBytesExt, WriteBytesExt};
 use std::collections::Bound as StdBound;
-use std::io::{Write, Read};
+use std::io::Read;
 
 // PostgreSQL range flags
 // https://github.com/postgres/postgres/blob/master/src/include/utils/rangetypes.h

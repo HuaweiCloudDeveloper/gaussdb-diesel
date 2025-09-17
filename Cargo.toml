@@ -24,8 +24,12 @@ url = "2.0"
 r2d2 = { version = "0.8", optional = true }
 tokio = { version = "1.0", optional = true }
 serde = { version = "1.0", optional = true }
+serde_json = { version = "1.0", optional = true }
 chrono = { version = "0.4", optional = true }
 uuid = { version = "1.0", optional = true }
+ipnetwork = { version = "0.20", optional = true }
+quickcheck = { version = "1.0", optional = true }
+bigdecimal = { version = "0.4", optional = true }
 bitflags = "2.0"
 byteorder = "1.0"
 itoa = "1.0"
@@ -35,6 +39,7 @@ fallible-iterator = "0.2"
 dotenvy = "0.15"
 tempfile = "3.0"
 tokio = { version = "1.0", features = ["full"] }
+testcontainers = "0.15"
 
 [features]
 default = ["with-deprecated", "gaussdb"]
@@ -46,7 +51,10 @@ tokio-postgres = ["dep:tokio-postgres", "tokio"]
 async = ["tokio-gaussdb"]
 chrono = ["dep:chrono", "diesel/chrono"]
 uuid = ["dep:uuid", "diesel/uuid"]
-serde_json = ["serde", "diesel/serde_json"]
+serde_json = ["dep:serde_json", "serde", "diesel/serde_json"]
+bigdecimal = ["dep:bigdecimal", "diesel/numeric"]
 with-deprecated = ["diesel/with-deprecated"]
-extras = ["chrono", "uuid", "serde_json"]
+extras = ["chrono", "uuid", "serde_json", "bigdecimal"]
 r2d2 = ["dep:r2d2"]
+ipnetwork = ["dep:ipnetwork"]
+quickcheck = ["dep:quickcheck"]
