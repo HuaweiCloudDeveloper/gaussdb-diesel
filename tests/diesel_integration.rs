@@ -79,8 +79,12 @@ fn test_basic_crud_operations() {
     // 验证删除了数据
     assert!(delete_result >= 0);
 
-    // 清理测试表
-    diesel::sql_query("DROP TABLE IF EXISTS test_users")
+    // 清理测试表 - 先删除有外键约束的表
+    diesel::sql_query("DROP TABLE IF EXISTS test_orders CASCADE")
+        .execute(&mut connection)
+        .unwrap_or(0); // 忽略错误，可能表不存在
+
+    diesel::sql_query("DROP TABLE IF EXISTS test_users CASCADE")
         .execute(&mut connection)
         .expect("Failed to drop test table");
 }
